@@ -11,27 +11,22 @@
 #include "Common.hpp"
 
 class Memory {
+    u8* memory;
 public:
     virtual u8 read(u16 location);
     virtual void write(u16 location, u8 value);
+    Memory();
+    ~Memory();
 };
 
 class RAM : Memory {
 private:
-    byte* ram;
+    u8* ram;
 public:
-    u8 read(u8 location);
+    u8 read(u16 location);
     void write(u16 location, u8 value);
     RAM();
-};
-
-class NROM : Memory {
-private:
-    byte* rom;
-public:
-    u8 read(u8 location);
-    void write(u16 location, u8 value);
-    NROM(byte* rom);
+    ~RAM();
 };
 
 #endif /* NESemu_Memory_hpp */

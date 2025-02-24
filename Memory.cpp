@@ -7,16 +7,37 @@
 
 #include <cstdlib>
 
+#include "Common.hpp"
 #include "Memory.hpp"
 
+Memory::Memory() {
+    memory = (u8*) malloc(0xffff);
+}
+
+Memory::~Memory() {
+    free(memory);
+}
+
+u8 Memory::read(u16 location) {
+    return memory[location];
+}
+
+void Memory::write(u16 location, u8 value) {
+    memory[location] = value;
+}
+
 RAM::RAM() {
-    ram = malloc(0x800);
+    ram = (u8*) malloc(0x800);
 }
 
 RAM::~RAM() {
     free(ram);
 }
 
-Mapper0::Mapper0() {
-    
+u8 RAM::read(u16 location) {
+    return ram[location & 0x7ff];
+}
+
+void RAM::write(u16 location, u8 value) {
+    ram[location & 0x7ff] = value;
 }

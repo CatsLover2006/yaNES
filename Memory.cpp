@@ -14,6 +14,8 @@ Memory::Memory() {
     memory = (u8*) malloc(0xffff);
 }
 
+Memory::Memory(u8* memory) : memory(memory) {};
+
 Memory::~Memory() {
     free(memory);
 }

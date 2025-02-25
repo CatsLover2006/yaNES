@@ -17,23 +17,17 @@ struct writebackData {
     bool needsWrite;
 };
 
-enum interuptType {
-    NMI,
-    IRQ,
-    RESET
-};
-
 class CPU {
 private:
     Memory &memory;
-    u8 accumulator, x, y, stack, status, t;
-    u16 pc;
+    u8 t;
     writebackData writeback;
-    bool doingInterupt;
-    interuptType interupt;
+    bool dualInterrupt, recievedNMI, recievedIRQ, resetCPU;
     u8 subCycles, instruction;
     void doInstruction();
 public:
+    u8 accumulator, x, y, stack, status;
+    u16 pc;
     void doCycle();
     void doWriteback();
     void transmitNMI();

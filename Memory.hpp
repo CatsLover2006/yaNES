@@ -16,6 +16,7 @@ public:
     virtual u8 read(u16 location);
     virtual void write(u16 location, u8 value);
     Memory();
+    Memory(u8* memory);
     ~Memory();
 };
 

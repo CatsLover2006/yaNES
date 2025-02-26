@@ -3,6 +3,9 @@
 !/**/
 !*.*
 
+# macOS BS
+.DS_Store
+
 # Prerequisites
 *.d
 

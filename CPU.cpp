@@ -33,6 +33,7 @@
 // This bit of the status is unused
 #define setStatusV status |= 0b01000000
 #define setStatusN status |= 0b10000000
+
 #define clearStatusC status &= 0b11111110
 #define clearStatusZ status &= 0b11111101
 #define clearStatusI status &= 0b11111011
@@ -43,8 +44,6 @@
 #define clearStatusN status &= 0b01111111
 
 #define sp stack
-
-// ISA Reference: https://www.masswerk.at/6502/6502_instruction_set.html
 
 CPU::CPU(Memory &memory) : memory(memory) {
     accumulator = 0;
@@ -82,6 +81,7 @@ void CPU::doCycle() {
                 resetCPU = false;
                 recievedNMI = false;
                 recievedIRQ = false;
+            case RTI:
                 break;
             case LDA:
             case 0x04:
@@ -126,6 +126,9 @@ void CPU::doCycle() {
                 if (doingInterrupt) setStatusB;
                 else clearStatusB;
                 subCycles = 7;
+                break;
+            case RTI:
+                subcycles = 6;
                 break;
             case PHP:
             case PHA:
@@ -215,6 +218,12 @@ void CPU::doInstruction() {
         case PHP:
             if (subCycles == 1) stackPush(status | 0b00110000);
             break;
+        case PLA:
+            if (subCycles == 1) accumulator = stackPop();
+            break;
+        case PHP:
+            if (subCycles == 1) status = stackPop() | 0b00110000;
+            break;
         case BRK:
             switch (subCycles) {
                 case 5:
@@ -224,7 +233,7 @@ void CPU::doInstruction() {
                     stackPush(pc & 0xff);
                     break;
                 case 3:
-                    stackPush(status);
+                    stackPush(status | 0b00110000);
                     break;
                 case 2:
                     if (recievedNMI)
@@ -235,6 +244,21 @@ void CPU::doInstruction() {
                     break;
                 case 1:
                     pc = pc | (memory.read(0xff01 + t) << 8);
+                    break;
+                default:
+                    break;
+            }
+            break;
+        case RTI:
+            switch (subCycles) {
+                case 3:
+                    status = stackPop() | 0b00110000;
+                    break;
+                case 2:
+                    pc = stackPop();
+                    break;
+                case 1:
+                    pc |= stackPop() << 8;
                     break;
                 default:
                     break;
@@ -271,11 +295,11 @@ void CPU::stackPush(u8 value) {
     writeback.needsWrite = true;
     writeback.location = 0x100 + stack;
     writeback.data = value;
-    stack++;
+    stack--;
 }
 
 u8 CPU::stackPop() {
     u8 value = memory.read(0x100 + stack);
-    stack--;
+    stack++;
     return value;
 }

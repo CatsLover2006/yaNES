@@ -20,4 +20,6 @@
 #define s32 int32_t
 #define s64 int64_t
 
+#define INLINE __attribute__((always_inline))
+
 #endif /* NESemu_Common_hpp */

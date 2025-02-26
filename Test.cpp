@@ -13,7 +13,7 @@
 #include "Memory.hpp"
 #include "InstructionSet.h"
 
-void cycle(CPU &cpu) {
+void INLINE cycle(CPU &cpu) {
     cpu.doCycle();
     cpu.doWriteback();
 }
@@ -159,3 +159,5 @@ Test(JAM, test) {
     cr_assert(cpu.pc, "CPU failed to unjam after reset");
     cr_expect(cpu.accumulator == 2, "CPU does not run code properly after jam and reset");
 }
+
+

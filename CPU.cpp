@@ -42,8 +42,8 @@
 
 #define updateZ(val)    if (val) clearStatusZ;\
                         else setStatusZ
-#define updateN(val)    if (val & 0x80) clearStatusN;\
-                        else setStatusN
+#define updateN(val)    if (val & 0x80) setStatusN;\
+                        else clearStatusN
 #define updateZN(val)   updateN(val);\
                         updateZ(val)
 

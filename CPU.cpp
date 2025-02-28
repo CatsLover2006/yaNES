@@ -21,7 +21,6 @@
 #define statusI (status & 0b00000100)
 #define statusD (status & 0b00001000)
 #define statusB (status & 0b00010000)
-// This bit of the status is unused
 #define statusV (status & 0b01000000)
 #define statusN (status & 0b10000000)
 
@@ -30,7 +29,6 @@
 #define setStatusI status |= 0b00000100
 #define setStatusD status |= 0b00001000
 #define setStatusB status |= 0b00010000
-// This bit of the status is unused
 #define setStatusV status |= 0b01000000
 #define setStatusN status |= 0b10000000
 
@@ -39,11 +37,21 @@
 #define clearStatusI status &= 0b11111011
 #define clearStatusD status &= 0b11110111
 #define clearStatusB status &= 0b11101111
-// This bit of the status is unused
 #define clearStatusV status &= 0b10111111
 #define clearStatusN status &= 0b01111111
 
+#define updateZ(val)    if (val) clearStatusZ;\
+                        else setStatusZ
+#define updateN(val)    if (val & 0x80) clearStatusN;\
+                        else setStatusN
+#define updateZN(val)   updateN(val);\
+                        updateZ(val)
+
+
 #define sp stack
+
+// Magic constant for illegal opcodes
+#define magic 0x69
 
 CPU::CPU(Memory &memory) : memory(memory) {
     accumulator = 0;
@@ -68,55 +76,16 @@ void CPU::transmitNMI() {
 }
 
 void CPU::transmitIRQ() {
-    recievedIRQ = !statusI; // Interrupt Disable
+    recievedIRQ |= !statusI; // Interrupt Disable
     setStatusI;
 }
 
 void CPU::doCycle() {
     if (!subCycles || resetCPU) {
         if (resetCPU) resetCPU = false;
-        else switch (instruction) {
-                // TODO: increment program counter
-            case BRK: // Interrupts
-                resetCPU = false;
-                recievedNMI = false;
-                recievedIRQ = false;
-            case RTI:
-                break;
-            case LDA:
-            case 0x04:
-            case 0x14:
-            case 0x34:
-            case 0x44:
-            case 0x54:
-            case 0x64:
-            case 0x74:
-            case 0x80:
-            case 0x82:
-            case 0x89:
-            case 0xC2:
-            case 0xD4:
-            case 0xE2:
-            case 0xF4:
-                pc++;
-            case SEI:
-            case SED:
-            case SEC:
-            case CLI:
-            case CLD:
-            case CLC:
-            case CLV:
-            case DEX:
-            case DEY:
-            case INX:
-            case INY:
-            case PHP:
-            case PHA:
-            case ROL_A:
-            case ASL_A:
-            default:
-                pc++;
-                break;
+        if (instruction == BRK) {
+            recievedNMI = false;
+            recievedIRQ = false;
         }
         if (doingInterrupt) instruction = BRK;
         else instruction = memory.read(pc);
@@ -127,11 +96,45 @@ void CPU::doCycle() {
                 else clearStatusB;
                 subCycles = 7;
                 break;
+            case JSR:
             case RTI:
-                subcycles = 6;
+                subCycles = 6;
+                break;
+            case JMP_I:
+                subCycles = 5;
+                break;
+            case LDA_0X:
+            case LDX_0Y:
+            case LAX_0Y:
+            case LDY_0X:
+            case STA_0X:
+            case STX_0Y:
+            case STY_0X:
+            case 0x0C:
+            case 0x14:
+            case 0x1C:
+            case 0x34:
+            case 0x3C:
+            case 0x54:
+            case 0x5C:
+            case 0x74:
+            case 0x7C:
+            case 0xD4:
+            case 0xDC:
+            case 0xF4:
+            case 0xFC:
+                subCycles = 4;
                 break;
             case PHP:
             case PHA:
+            case JMP:
+            case LDA_0:
+            case LDX_0:
+            case LAX_0:
+            case LDY_0:
+            case STA_0:
+            case STX_0:
+            case STY_0:
             case 0x04:
             case 0x44:
             case 0x64:
@@ -145,12 +148,21 @@ void CPU::doCycle() {
             case CLC:
             case CLV:
             case LDA:
+            case LDX:
+            case LXA:
+            case LDY:
             case DEX:
             case DEY:
             case INX:
             case INY:
             case ROL_A:
             case ASL_A:
+            case TAX:
+            case TAY:
+            case TSX:
+            case TXA:
+            case TYA:
+            case TXS:
             case NOP:
             default:
                 subCycles = 2;
@@ -162,75 +174,362 @@ void CPU::doCycle() {
 
 void CPU::doInstruction() {
     switch (instruction) { // TODO: implement instructions
-        case LDA:
+        case LDA_0X:
+        case LDA_0: {
             if (subCycles == 1) {
-                accumulator = memory.read(pc + 1);
+                u8 mem = memory.read(pc + 1);
+                if (instruction == LDA_0X) mem += x;
+                accumulator = memory.read(mem);
+                updateZN(accumulator);
+                pc += 2;
             }
             break;
-        case ROL_A:
+        }
+        case LDX_0Y:
+        case LDX_0: {
+            if (subCycles == 1) {
+                u8 mem = memory.read(pc + 1);
+                if (instruction == LDX_0Y) mem += y;
+                x = memory.read(mem);
+                updateZN(x);
+                pc += 2;
+            }
+            break;
+        }
+        case LAX_0Y:
+        case LAX_0: {
+            if (subCycles == 1) {
+                u8 mem = memory.read(pc + 1);
+                if (instruction == LAX_0Y) mem += y;
+                x = memory.read(mem);
+                accumulator = x;
+                updateZN(x);
+                pc += 2;
+            }
+            break;
+        }
+        case LDY_0X:
+        case LDY_0: {
+            if (subCycles == 1) {
+                u8 mem = memory.read(pc + 1);
+                if (instruction == LDY_0X) mem += x;
+                y = memory.read(mem);
+                updateZN(y);
+                pc += 2;
+            }
+            break;
+        }
+        case STA_0X:
+        case STA_0: {
+            if (subCycles == 1) {
+                u8 mem = memory.read(pc + 1);
+                if (instruction == LDA_0X) mem += x;
+                writeback.location = mem;
+                writeback.data = accumulator;
+                writeback.needsWrite = true;
+                pc += 2;
+            }
+            break;
+        }
+        case STX_0Y:
+        case STX_0: {
+            if (subCycles == 1) {
+                u8 mem = memory.read(pc + 1);
+                if (instruction == LDX_0Y) mem += y;
+                writeback.location = mem;
+                writeback.data = x;
+                writeback.needsWrite = true;
+                pc += 2;
+            }
+            break;
+        }
+        case STY_0X:
+        case STY_0: {
+            if (subCycles == 1) {
+                u8 mem = memory.read(pc + 1);
+                if (instruction == LDY_0X) mem += x;
+                writeback.location = mem;
+                writeback.data = y;
+                writeback.needsWrite = true;
+                pc += 2;
+            }
+            break;
+        }
+        case LDA: {
+            if (subCycles == 1) {
+                accumulator = memory.read(pc + 1);
+                updateZN(accumulator);
+                pc += 2;
+            }
+            break;
+        }
+        case LDX: {
+            if (subCycles == 1) {
+                x = memory.read(pc + 1);
+                updateZN(x);
+                pc += 2;
+            }
+            break;
+        }
+        case LDY: {
+            if (subCycles == 1) {
+                y = memory.read(pc + 1);
+                updateZN(y);
+                pc += 2;
+            }
+            break;
+        }
+        case LXA: {
+            if (subCycles == 1) {
+                t = memory.read(pc + 1);
+                x = (accumulator | magic) & t;
+                accumulator = x;
+                updateZN(x);
+                pc += 2;
+            }
+            break;
+        }
+        case TAX: {
+            if (subCycles == 1) {
+                x = accumulator;
+                updateZN(accumulator);
+                pc++;
+            }
+            break;
+        }
+        case TAY: {
+            if (subCycles == 1) {
+                y = accumulator;
+                updateZN(accumulator);
+                pc++;
+            }
+            break;
+        }
+        case TSX: {
+            if (subCycles == 1) {
+                x = stack;
+                updateZN(x);
+                pc++;
+            }
+            break;
+        }
+        case TXA: {
+            if (subCycles == 1) {
+                accumulator = x;
+                updateZN(accumulator);
+                pc++;
+            }
+            break;
+        }
+        case TYA: {
+            if (subCycles == 1) {
+                accumulator = y;
+                updateZN(accumulator);
+                pc++;
+            }
+            break;
+        }
+        case TXS: {
+            if (subCycles == 1) {
+                stack = x;
+                pc++;
+            }
+            break;
+        }
         case ASL_A:
+        case ROL_A: {
             if (subCycles == 1) {
                 bool c = statusC;
                 if (accumulator & 0x80) setStatusC;
                 else clearStatusC;
                 accumulator = accumulator << 1;
                 if ((instruction == ROL_A) && c) accumulator++;
-                if (!accumulator) setStatusZ;
-                else clearStatusZ;
+                updateZN(accumulator);
+                pc++;
             }
             break;
-        case SEI:
-            if (subCycles == 1) setStatusI;
+        }
+        case ROR_A: {
+            if (subCycles == 1) {
+                bool c = statusC;
+                if (accumulator & 0x01) setStatusC;
+                else clearStatusC;
+                accumulator = accumulator >> 1;
+                if (c) accumulator |= 0x80;
+                updateZN(accumulator);
+                pc++;
+            }
             break;
-        case SEC:
-            if (subCycles == 1) setStatusC;
+        }
+        case JMP: {
+            switch (subCycles) {
+                case 2:
+                    pc = memory.read(pc + 1);
+                    break;
+                case 1:
+                    pc |= memory.read(pc + 2) << 8;
+                    break;
+            }
             break;
-        case SED:
-            if (subCycles == 1) setStatusD;
+        }
+        case JMP_I: {
+            switch (subCycles) {
+                case 2:
+                    pc += memory.read(pc + 1);
+                    break;
+                case 1:
+                    pc += memory.read(pc + 2) << 8;
+                    break;
+            }
             break;
-        case CLI:
-            if (subCycles == 1) clearStatusI;
+        }
+        case JSR: {
+            switch (subCycles) {
+                case 4:
+                    stackPush((pc + 2) >> 8);
+                    break;
+                case 3:
+                    stackPush((pc + 2) & 0xff);
+                    break;
+                case 2:
+                    pc = memory.read(pc + 1);
+                    break;
+                case 1:
+                    pc |= memory.read(pc + 2) << 8;
+                    break;
+            }
             break;
-        case CLC:
-            if (subCycles == 1) clearStatusC;
+        }
+        case RTS: {
+            switch (subCycles) {
+                case 3:
+                    pc = stackPop();
+                    break;
+                case 2:
+                    pc |= stackPop() << 8;
+                    break;
+                case 1:
+                    pc++;
+                    break;
+            }
             break;
-        case CLD:
-            if (subCycles == 1) clearStatusD;
+        }
+        case SEI: {
+            if (subCycles == 1) {
+                setStatusI;
+                pc++;
+            }
             break;
-        case CLV:
-            if (subCycles == 1) clearStatusV;
+        }
+        case SEC: {
+            if (subCycles == 1) {
+                setStatusC;
+                pc++;
+            }
             break;
-        case DEX:
-            if (subCycles == 1) x--;
+        }
+        case SED: {
+            if (subCycles == 1) {
+                setStatusD;
+                pc++;
+            }
             break;
-        case DEY:
-            if (subCycles == 1) y--;
+        }
+        case CLI: {
+            if (subCycles == 1) {
+                clearStatusI;
+                pc++;
+            }
             break;
-        case INX:
-            if (subCycles == 1) x++;
+        }
+        case CLC: {
+            if (subCycles == 1) {
+                clearStatusC;
+                pc++;
+            }
             break;
-        case INY:
-            if (subCycles == 1) y++;
+        }
+        case CLD: {
+            if (subCycles == 1) {
+                clearStatusD;
+                pc++;
+            }
             break;
-        case PHA:
-            if (subCycles == 1) stackPush(accumulator);
+        }
+        case CLV: {
+            if (subCycles == 1) {
+                clearStatusV;
+                pc++;
+            }
             break;
-        case PHP:
-            if (subCycles == 1) stackPush(status | 0b00110000);
+        }
+        case DEX: {
+            if (subCycles == 1) {
+                x--;
+                updateZN(x);
+                pc++;
+            }
             break;
-        case PLA:
-            if (subCycles == 1) accumulator = stackPop();
+        }
+        case DEY: {
+            if (subCycles == 1) {
+                y--;
+                updateZN(y);
+                pc++;
+            }
             break;
-        case PHP:
-            if (subCycles == 1) status = stackPop() | 0b00110000;
+        }
+        case INX: {
+            if (subCycles == 1) {
+                x++;
+                updateZN(x);
+                pc++;
+            }
             break;
-        case BRK:
+        }
+        case INY: {
+            if (subCycles == 1) {
+                y++;
+                updateZN(y);
+                pc++;
+            }
+            break;
+        }
+        case PHA: {
+            if (subCycles == 1) {
+                stackPush(accumulator);
+                pc++;
+            }
+            break;
+        }
+        case PHP: {
+            if (subCycles == 1) {
+                stackPush(status | 0b00110000);
+                pc++;
+            }
+            break;
+        }
+        case PLA: {
+            if (subCycles == 1) {
+                accumulator = stackPop();
+                pc++;
+            }
+            break;
+        }
+        case PLP: {
+            if (subCycles == 1) {
+                status = stackPop() | 0b00110000;
+                pc++;
+            }
+            break;
+        }
+        case BRK: {
             switch (subCycles) {
                 case 5:
-                    stackPush(pc >> 8);
+                    stackPush((pc + 2) >> 8);
                     break;
                 case 4:
-                    stackPush(pc & 0xff);
+                    stackPush((pc + 2) & 0xff);
                     break;
                 case 3:
                     stackPush(status | 0b00110000);
@@ -249,7 +548,8 @@ void CPU::doInstruction() {
                     break;
             }
             break;
-        case RTI:
+        }
+        case RTI: {
             switch (subCycles) {
                 case 3:
                     status = stackPop() | 0b00110000;
@@ -264,6 +564,7 @@ void CPU::doInstruction() {
                     break;
             }
             break;
+        }
         case 0x02: // JAM
         case 0x12: // JAM
         case 0x22: // JAM
@@ -277,8 +578,34 @@ void CPU::doInstruction() {
         case 0xD2: // JAM
         case 0xF2: // JAM
             return; // Prevent the CPU from continuing
+        case 0x0C: // 3-byte NOP
+        case 0x1C: // 3-byte NOP
+        case 0x3C: // 3-byte NOP
+        case 0x5C: // 3-byte NOP
+        case 0x7C: // 3-byte NOP
+        case 0xDC: // 3-byte NOP
+        case 0xFC: // 3-byte NOP
+            if (subCycles == 1) pc += 3;
+            break;
+        case 0x04: // 2-byte NOP
+        case 0x14: // 2-byte NOP
+        case 0x34: // 2-byte NOP
+        case 0x44: // 2-byte NOP
+        case 0x54: // 2-byte NOP
+        case 0x64: // 2-byte NOP
+        case 0x74: // 2-byte NOP
+        case 0x80: // 2-byte NOP
+        case 0x82: // 2-byte NOP
+        case 0x89: // 2-byte NOP
+        case 0xC2: // 2-byte NOP
+        case 0xD4: // 2-byte NOP
+        case 0xE2: // 2-byte NOP
+        case 0xF4: // 2-byte NOP
+            if (subCycles == 1) pc += 2;
+            break;
         case NOP:
-        default:
+        default: // Assumed 1-byte NOP
+            if (subCycles == 1) pc++;
             break;
     }
     subCycles--;

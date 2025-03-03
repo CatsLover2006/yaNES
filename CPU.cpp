@@ -107,9 +107,19 @@ void CPU::doCycle() {
             case LDX_0Y:
             case LAX_0Y:
             case LDY_0X:
+            case LDA_A:
+            case LDX_A:
+            case LAX_A:
+            case LDY_A:
+            case LDA_AX:
+            case LDA_AY:
+            case LDX_AY:
+            case LAX_AY:
+            case LDY_AX:
             case STA_0X:
             case STX_0Y:
             case STY_0X:
+            case EOR_0X:
             case 0x0C:
             case 0x14:
             case 0x1C:
@@ -135,6 +145,7 @@ void CPU::doCycle() {
             case STA_0:
             case STX_0:
             case STY_0:
+            case EOR_0:
             case 0x04:
             case 0x44:
             case 0x64:
@@ -155,8 +166,9 @@ void CPU::doCycle() {
             case DEY:
             case INX:
             case INY:
-            case ROL_A:
-            case ASL_A:
+            case ROL:
+            case ROR:
+            case ASL:
             case TAX:
             case TAY:
             case TSX:
@@ -164,6 +176,9 @@ void CPU::doCycle() {
             case TYA:
             case TXS:
             case NOP:
+            case EOR:
+            case ANC:
+            case ANC_R:
             default:
                 subCycles = 2;
                 break;
@@ -174,6 +189,162 @@ void CPU::doCycle() {
 
 void CPU::doInstruction() {
     switch (instruction) { // TODO: implement instructions
+        case LDA_AX:
+        case LDA_AY: {
+            switch (subCycles) {
+                case 9:
+                    subCycles = 1;
+                    break;
+                case 3:
+                    t16 = memory.read(pc + 1);
+                    break;
+                case 2:
+                    t16 += memory.read(pc + 2) << 8;
+                    break;
+                case 1:
+                    t = t16 >> 8;
+                    if (instruction == LDA_AX) t16 += x;
+                    else t16 += y;
+                    if (t != t16 >> 8) subCycles = 10;
+                    accumulator = memory.read(t16);
+                    updateZN(accumulator);
+                    pc += 3;
+                    break;
+            }
+            break;
+        }
+        case LAX_AY: {
+            switch (subCycles) {
+                case 9:
+                    subCycles = 1;
+                    break;
+                case 3:
+                    t16 = memory.read(pc + 1);
+                    break;
+                case 2:
+                    t16 += memory.read(pc + 2) << 8;
+                    break;
+                case 1:
+                    t = t16 >> 8;
+                    t16 += y;
+                    if (t != t16 >> 8) subCycles = 10;
+                    x = memory.read(t16);
+                    accumulator = x;
+                    updateZN(x);
+                    pc += 3;
+                    break;
+            }
+            break;
+        }
+        case LDX_AY: {
+            switch (subCycles) {
+                case 9:
+                    subCycles = 1;
+                    break;
+                case 3:
+                    t16 = memory.read(pc + 1);
+                    break;
+                case 2:
+                    t16 += memory.read(pc + 2) << 8;
+                    break;
+                case 1:
+                    t = t16 >> 8;
+                    t16 += y;
+                    if (t != t16 >> 8) subCycles = 10;
+                    x = memory.read(t16);
+                    updateZN(x);
+                    pc += 3;
+                    break;
+            }
+            break;
+        }
+        case LDY_AX: {
+            switch (subCycles) {
+                case 9:
+                    subCycles = 1;
+                    break;
+                case 3:
+                    t16 = memory.read(pc + 1);
+                    break;
+                case 2:
+                    t16 += memory.read(pc + 2) << 8;
+                    break;
+                case 1:
+                    t = t16 >> 8;
+                    t16 += x;
+                    if (t != t16 >> 8) subCycles = 10;
+                    y = memory.read(t16);
+                    updateZN(y);
+                    pc += 3;
+                    break;
+            }
+            break;
+        }
+        case LDA_A: {
+            switch (subCycles) {
+                case 3:
+                    t16 = memory.read(pc + 1);
+                    break;
+                case 2:
+                    t16 += memory.read(pc + 2) << 8;
+                    break;
+                case 1:
+                    accumulator = memory.read(t16);
+                    updateZN(accumulator);
+                    pc += 3;
+                    break;
+            }
+            break;
+        }
+        case LAX_A: {
+            switch (subCycles) {
+                case 3:
+                    t16 = memory.read(pc + 1);
+                    break;
+                case 2:
+                    t16 += memory.read(pc + 2) << 8;
+                    break;
+                case 1:
+                    x = memory.read(t16);
+                    accumulator = x;
+                    updateZN(x);
+                    pc += 3;
+                    break;
+            }
+            break;
+        }
+        case LDX_A: {
+            switch (subCycles) {
+                case 3:
+                    t16 = memory.read(pc + 1);
+                    break;
+                case 2:
+                    t16 += memory.read(pc + 2) << 8;
+                    break;
+                case 1:
+                    x = memory.read(t16);
+                    updateZN(x);
+                    pc += 3;
+                    break;
+            }
+            break;
+        }
+        case LDY_A: {
+            switch (subCycles) {
+                case 3:
+                    t16 = memory.read(pc + 1);
+                    break;
+                case 2:
+                    t16 += memory.read(pc + 2) << 8;
+                    break;
+                case 1:
+                    y = memory.read(t16);
+                    updateZN(y);
+                    pc += 3;
+                    break;
+            }
+            break;
+        }
         case LDA_0X:
         case LDA_0: {
             if (subCycles == 1) {
@@ -336,49 +507,59 @@ void CPU::doInstruction() {
             }
             break;
         }
-        case ASL_A:
-        case ROL_A: {
+        case EOR: {
+            if (subCycles == 1) {
+                accumulator ^= memory.read(pc + 1);
+                updateZN(accumulator);
+                pc += 2;
+            }
+        }
+        case EOR_0X:
+        case EOR_0: {
+            if (subCycles == 1) {
+                u8 mem = memory.read(pc + 1);
+                if (instruction == EOR_0X) mem += x;
+                accumulator ^= memory.read(mem);
+                updateZN(accumulator);
+                pc += 2;
+            }
+        }
+        case ASL:
+        case ROL: {
             if (subCycles == 1) {
                 bool c = statusC;
                 if (accumulator & 0x80) setStatusC;
                 else clearStatusC;
                 accumulator = accumulator << 1;
-                if ((instruction == ROL_A) && c) accumulator++;
+                if ((instruction == ROL) && c) accumulator |= 0x01;
                 updateZN(accumulator);
                 pc++;
             }
             break;
         }
-        case ROR_A: {
+        case LSR:
+        case ROR: {
             if (subCycles == 1) {
                 bool c = statusC;
                 if (accumulator & 0x01) setStatusC;
                 else clearStatusC;
                 accumulator = accumulator >> 1;
-                if (c) accumulator |= 0x80;
+                if ((instruction == ROR) && c) accumulator |= 0x80;
                 updateZN(accumulator);
                 pc++;
             }
             break;
         }
+        case JMP_I:
         case JMP: {
             switch (subCycles) {
                 case 2:
-                    pc = memory.read(pc + 1);
+                    t = memory.read(pc + 1);
                     break;
                 case 1:
-                    pc |= memory.read(pc + 2) << 8;
-                    break;
-            }
-            break;
-        }
-        case JMP_I: {
-            switch (subCycles) {
-                case 2:
-                    pc += memory.read(pc + 1);
-                    break;
-                case 1:
-                    pc += memory.read(pc + 2) << 8;
+                    if (instruction == JMP_I) pc += memory.read(pc + 2) << 8;
+                    else pc = memory.read(pc + 2) << 8;
+                    pc += t;
                     break;
             }
             break;
@@ -390,12 +571,7 @@ void CPU::doInstruction() {
                     break;
                 case 3:
                     stackPush((pc + 2) & 0xff);
-                    break;
-                case 2:
-                    pc = memory.read(pc + 1);
-                    break;
-                case 1:
-                    pc |= memory.read(pc + 2) << 8;
+                    instructon = JMP; // size optimization
                     break;
             }
             break;
@@ -564,6 +740,23 @@ void CPU::doInstruction() {
                     break;
             }
             break;
+        }
+        case AND: {
+            if (subCycles == 1) {
+                accumulator &= memory.read(pc + 1);
+                updateZN(accumulator);
+                pc += 2;
+            }
+        }
+        case ANC:
+        case ANC_R: {
+            if (subCycles == 1) {
+                accumulator &= memory.read(pc + 1);
+                updateZN(accumulator);
+                if (statusN) setStatusC;
+                else clearStatusC;
+                pc += 2;
+            }
         }
         case 0x02: // JAM
         case 0x12: // JAM

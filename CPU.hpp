@@ -21,6 +21,7 @@ class CPU {
 private:
     Memory &memory;
     u8 t;
+    u16 t16;
     writebackData writeback;
     bool dualInterrupt, recievedNMI, recievedIRQ, resetCPU;
     u8 subCycles, instruction;

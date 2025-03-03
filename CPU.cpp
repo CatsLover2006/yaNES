@@ -42,8 +42,10 @@
 
 #define updateZ(val)    if (val) clearStatusZ;\
                         else setStatusZ
+
 #define updateN(val)    if (val & 0x80) setStatusN;\
                         else clearStatusN
+
 #define updateZN(val)   updateN(val);\
                         updateZ(val)
 
@@ -62,7 +64,7 @@ CPU::CPU(Memory &memory) : memory(memory) {
 }
 
 void CPU::reset() {
-    pc = memory.read(0xff00 + t) + (memory.read(0xff01 + t) << 8);
+    pc = read16(memory, 0xfffc);
     subCycles = 0;
     setStatusI;
     recievedNMI = false;
@@ -348,9 +350,9 @@ void CPU::doInstruction() {
         case LDA_0X:
         case LDA_0: {
             if (subCycles == 1) {
-                u8 mem = memory.read(pc + 1);
-                if (instruction == LDA_0X) mem += x;
-                accumulator = memory.read(mem);
+                t = memory.read(pc + 1);
+                if (instruction == LDA_0X) t += x;
+                accumulator = memory.read(t);
                 updateZN(accumulator);
                 pc += 2;
             }
@@ -359,9 +361,9 @@ void CPU::doInstruction() {
         case LDX_0Y:
         case LDX_0: {
             if (subCycles == 1) {
-                u8 mem = memory.read(pc + 1);
-                if (instruction == LDX_0Y) mem += y;
-                x = memory.read(mem);
+                t = memory.read(pc + 1);
+                if (instruction == LDX_0Y) t += y;
+                x = memory.read(t);
                 updateZN(x);
                 pc += 2;
             }
@@ -370,9 +372,9 @@ void CPU::doInstruction() {
         case LAX_0Y:
         case LAX_0: {
             if (subCycles == 1) {
-                u8 mem = memory.read(pc + 1);
-                if (instruction == LAX_0Y) mem += y;
-                x = memory.read(mem);
+                t = memory.read(pc + 1);
+                if (instruction == LAX_0Y) t += y;
+                x = memory.read(t);
                 accumulator = x;
                 updateZN(x);
                 pc += 2;
@@ -382,9 +384,9 @@ void CPU::doInstruction() {
         case LDY_0X:
         case LDY_0: {
             if (subCycles == 1) {
-                u8 mem = memory.read(pc + 1);
-                if (instruction == LDY_0X) mem += x;
-                y = memory.read(mem);
+                t = memory.read(pc + 1);
+                if (instruction == LDY_0X) t += x;
+                y = memory.read(t);
                 updateZN(y);
                 pc += 2;
             }
@@ -393,9 +395,9 @@ void CPU::doInstruction() {
         case STA_0X:
         case STA_0: {
             if (subCycles == 1) {
-                u8 mem = memory.read(pc + 1);
-                if (instruction == LDA_0X) mem += x;
-                writeback.location = mem;
+                t = memory.read(pc + 1);
+                if (instruction == LDA_0X) t += x;
+                writeback.location = t;
                 writeback.data = accumulator;
                 writeback.needsWrite = true;
                 pc += 2;
@@ -405,9 +407,9 @@ void CPU::doInstruction() {
         case STX_0Y:
         case STX_0: {
             if (subCycles == 1) {
-                u8 mem = memory.read(pc + 1);
-                if (instruction == LDX_0Y) mem += y;
-                writeback.location = mem;
+                t = memory.read(pc + 1);
+                if (instruction == LDX_0Y) t += y;
+                writeback.location = t;
                 writeback.data = x;
                 writeback.needsWrite = true;
                 pc += 2;
@@ -417,9 +419,9 @@ void CPU::doInstruction() {
         case STY_0X:
         case STY_0: {
             if (subCycles == 1) {
-                u8 mem = memory.read(pc + 1);
-                if (instruction == LDY_0X) mem += x;
-                writeback.location = mem;
+                t = memory.read(pc + 1);
+                if (instruction == LDY_0X) t += x;
+                writeback.location = t;
                 writeback.data = y;
                 writeback.needsWrite = true;
                 pc += 2;
@@ -517,9 +519,9 @@ void CPU::doInstruction() {
         case EOR_0X:
         case EOR_0: {
             if (subCycles == 1) {
-                u8 mem = memory.read(pc + 1);
-                if (instruction == EOR_0X) mem += x;
-                accumulator ^= memory.read(mem);
+                t = memory.read(pc + 1);
+                if (instruction == EOR_0X) t += x;
+                accumulator ^= memory.read(t);
                 updateZN(accumulator);
                 pc += 2;
             }

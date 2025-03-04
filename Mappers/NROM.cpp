@@ -5,21 +5,23 @@
 //  Created by Chance Parsons on 2025-03-03.
 //
 
-#include "Common.hpp"
+#include <cstdlib>
+
+#include "../Common.hpp"
 #include "NROM.hpp"
 
 NROM::NROM(u8* rom) {
     u8 temp = rom[4];
     bool hasTrainer = rom[6] & 0x04;
-    prgROM = malloc(32768);
-    prgRAM = malloc(8192);
-    chrRAM = malloc(8192);
+    prgROM = (u8*) malloc(32768);
+    prgRAM = (u8*) malloc(8192);
+    chrRAM = (u8*) malloc(8192);
     u16 offset = hasTrainer ? 528 : 16;
-    for (int i = 0; i < 32768) {
+    for (int i = 0; i < 32768; i++) {
         prgROM[i] = rom[(i & (16384 * temp)) + offset];
     }
     offset += 16384 * temp;
-    for (int i = 0; i < 8192) {
+    for (int i = 0; i < 8192; i++) {
         chrRAM[i] = rom[(i & 8192) + offset];
     }
 }

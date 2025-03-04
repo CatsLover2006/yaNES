@@ -12,7 +12,7 @@
 
 #include <iostream>
 
-#define read16(memory, address) (memory.read(memory) + (memory.read(memory + 1) << 8)
+#define read16(memory, address) (memory.read(address) + (memory.read(address + 1) << 8))
 
 #define doingInterrupt (recievedNMI || recievedIRQ)
 
@@ -573,7 +573,7 @@ void CPU::doInstruction() {
                     break;
                 case 3:
                     stackPush((pc + 2) & 0xff);
-                    instructon = JMP; // size optimization
+                    instruction = JMP; // size optimization
                     break;
             }
             break;

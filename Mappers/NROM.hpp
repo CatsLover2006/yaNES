@@ -8,8 +8,8 @@
 #ifndef NESemu_NROM_hpp
 #define NESemu_NROM_hpp
 
-#include "Common.hpp"
-#include "Cartridge.hpp"
+#include "../Common.hpp"
+#include "../Cartridge.hpp"
 
 class NROM : Cartridge {
     u8* prgROM;

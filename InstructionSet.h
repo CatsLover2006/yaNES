@@ -27,7 +27,7 @@
 #define EOR     0x49
 #define LSR     0x4A
 #define JMP     0x4C
-#define EOR_0X  0x45
+#define EOR_0X  0x55
 #define CLI     0x58
 #define RTS     0x60
 #define PLA     0x68

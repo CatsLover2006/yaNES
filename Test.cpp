@@ -41,7 +41,7 @@ Test(ROL_accumulator, test) {
     memory.write(1, 1);
     // Write 13 ROLs
     for (int i = 2; i < 15; i++)
-        memory.write(i, ROL_A);
+        memory.write(i, ROL);
     // Set up vectors
     memory.write(0xfffe, 0x10);
     memory.write(0xffff, 0x10);
@@ -92,7 +92,7 @@ Test(ASL_accumulator, test) {
     memory.write(1, 1);
     // Write 13 ASLs
     for (int i = 2; i < 15; i++)
-        memory.write(i, ASL_A);
+        memory.write(i, ASL);
     // Set up vectors
     memory.write(0xfffe, 0x10);
     memory.write(0xffff, 0x10);
@@ -153,7 +153,7 @@ Test(JAM, test) {
     }
     memory.write(0, LDA);
     memory.write(1, 1);
-    memory.write(2, ROL_A);
+    memory.write(2, ROL);
     cpu.reset();
     for (int i = 0; i < 4; i++) cycle(cpu);
     cr_assert(cpu.pc, "CPU failed to unjam after reset");

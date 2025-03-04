@@ -16,6 +16,7 @@ public:
     virtual u8 read(u16 location);
     virtual void write(u16 location, u8 value);
     virtual u8 readPPU(u16 location);
+    Cartridge();
 };
 
 #endif /* Cartridge_hpp */

@@ -41,6 +41,12 @@ u8 NROM::readPPU(u16 location) {
     return chrRAM[location & 0x1fff];
 }
 
+void NROM::writePPU(u16 location, u8 value) {
+    if (location < 0x2000) chrRAM[location & 0x1fff] = value;
+}
+
 void NROM::write(u16 location, u8 value) {
     if (location < 0x8000) prgRAM[location & 0x1fff] = value;
 }
+
+

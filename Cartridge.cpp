@@ -12,3 +12,4 @@ Cartridge::Cartridge() {};
 u8 Cartridge::read(u16 location) { return location & 0xff; };
 u8 Cartridge::readPPU(u16 location) { return location & 0xff; };
 void Cartridge::write(u16 location, u8 value) {};
+void Cartridge::writePPU(u16 location, u8 value) {};

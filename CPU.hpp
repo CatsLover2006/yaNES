@@ -11,29 +11,25 @@
 #include "Common.hpp"
 #include "Memory.hpp"
 
-struct writebackData {
-    u16 location;
-    u8 data;
-    bool needsWrite;
-};
-
 class CPU {
 private:
     Memory &memory;
     u8 t;
     u16 t16;
-    writebackData writeback;
-    bool dualInterrupt, recievedNMI, recievedIRQ, resetCPU;
-    u8 subCycles, instruction;
+    bool recievedNMI, recievedIRQ, recievedInterrupt, resetCPU;
+    u8 instruction;
+    s8 subCycle;
     void doInstruction();
 public:
     u8 accumulator, x, y, stack, status;
     u16 pc;
     void doCycle();
-    void doWriteback();
-    void transmitNMI();
-    void transmitIRQ();
-    void reset();
+    void setNMI();
+    void clearNMI();
+    void setIRQ();
+    void clearIRQ();
+    void setReset();
+    void clearReset();
     void stackPush(u8 value);
     u8 stackPop();
     CPU(Memory &memory);

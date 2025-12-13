@@ -25,13 +25,19 @@ class PPU {
 private:
     Cartridge * cartridge;
     u8* oam;
+    u8* ciram;
+    u8* palette;
+    bool ppuscroll;
+    u8 ppuctrl, ppumask, ppustatus, ppuscrollx, ppuscrolly;
 public:
     void attachCart(Cartridge * cart);
     void writeOAM(u8 location, u8 value);
+    void write(u16 location, u8 value);
     void doCycle();
     PPU();
     ~PPU();
     Frame drawnFrame;
+    void reset();
 };
 
 #endif /* PPU_hpp */

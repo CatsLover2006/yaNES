@@ -16,7 +16,7 @@ u8 MemoryMapCPU::read(u16 location) {
     } else if (location < 0x4020) { // APU and I/O
         // TODO: APU
     }
-    return cart.read(location);
+    return cart->read(location);
 }
 
 void MemoryMapCPU::write(u16 location, u8 value) {
@@ -28,13 +28,15 @@ void MemoryMapCPU::write(u16 location, u8 value) {
     } else if (location < 0x4020) { // APU and I/O
         // TODO: APU
     }
-    cart.write(location, value);
+    cart->write(location, value);
 }
 
-void MemoryMapCPU::attachCart(Cartridge &cartridge) {
+void MemoryMapCPU::attachCart(Cartridge *cartridge) {
     cart = cartridge;
+    if (ppu) ppu->attachCart(cart);
 }
 
-void MemoryMapCPU::attachPPU(PPU &ppuToAttach) {
+void MemoryMapCPU::attachPPU(PPU *ppuToAttach) {
     ppu = ppuToAttach;
+    if (cart) ppu->attachCart(cart);
 }

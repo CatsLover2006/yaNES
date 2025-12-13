@@ -14,7 +14,7 @@
 
 #define read16(memory, address) (memory.read(address) + (memory.read(address + 1) << 8))
 
-#define doingInterrupt (recievedNMI || recievedIRQ)
+#define FINISHED_INSTRUCTION (-1)
 
 #define statusC (status & 0b00000001)
 #define statusZ (status & 0b00000010)
@@ -49,774 +49,305 @@
 #define updateZN(val)   updateN(val);\
                         updateZ(val)
 
-
 #define sp stack
 
 // Magic constant for illegal opcodes
-#define magic 0x69
+#define MAGIC 0x69
 
 CPU::CPU(Memory &memory) : memory(memory) {
     accumulator = 0;
     x = 0;
     y = 0;
-    stack = 0;
+    stack = 0xff;
     status = 0;
 }
 
-void CPU::reset() {
-    pc = read16(memory, 0xfffc);
-    subCycles = 0;
-    setStatusI;
-    recievedNMI = false;
-    recievedIRQ = false;
+void CPU::setReset() {
     resetCPU = true;
 }
 
-void CPU::transmitNMI() {
-    setStatusI;
+void CPU::clearReset() {
+    resetCPU = false;
+}
+
+void CPU::setNMI() {
     recievedNMI = true;
 }
 
-void CPU::transmitIRQ() {
-    recievedIRQ |= !statusI; // Interrupt Disable
-    setStatusI;
+void CPU::clearNMI() {
+    recievedNMI = false;
+}
+
+void CPU::setIRQ() {
+    recievedIRQ = true;
+}
+
+void CPU::clearIRQ() {
+    recievedIRQ = false;
 }
 
 void CPU::doCycle() {
-    if (!subCycles || resetCPU) {
-        if (resetCPU) resetCPU = false;
-        if (instruction == BRK) {
-            recievedNMI = false;
-            recievedIRQ = false;
-        }
-        if (doingInterrupt) instruction = BRK;
-        else instruction = memory.read(pc);
-        switch (instruction) {
-                // TODO: set cycle count
-            case BRK:
-                if (doingInterrupt) setStatusB;
-                else clearStatusB;
-                subCycles = 7;
-                break;
-            case JSR:
-            case RTI:
-                subCycles = 6;
-                break;
-            case JMP_I:
-                subCycles = 5;
-                break;
-            case LDA_0X:
-            case LDX_0Y:
-            case LAX_0Y:
-            case LDY_0X:
-            case LDA_A:
-            case LDX_A:
-            case LAX_A:
-            case LDY_A:
-            case LDA_AX:
-            case LDA_AY:
-            case LDX_AY:
-            case LAX_AY:
-            case LDY_AX:
-            case STA_0X:
-            case STX_0Y:
-            case STY_0X:
-            case EOR_0X:
-            case 0x0C:
-            case 0x14:
-            case 0x1C:
-            case 0x34:
-            case 0x3C:
-            case 0x54:
-            case 0x5C:
-            case 0x74:
-            case 0x7C:
-            case 0xD4:
-            case 0xDC:
-            case 0xF4:
-            case 0xFC:
-                subCycles = 4;
-                break;
-            case PHP:
-            case PHA:
-            case JMP:
-            case LDA_0:
-            case LDX_0:
-            case LAX_0:
-            case LDY_0:
-            case STA_0:
-            case STX_0:
-            case STY_0:
-            case EOR_0:
-            case 0x04:
-            case 0x44:
-            case 0x64:
-                subCycles = 3;
-                break;
-            case SEI:
-            case SED:
-            case SEC:
-            case CLI:
-            case CLD:
-            case CLC:
-            case CLV:
-            case LDA:
-            case LDX:
-            case LXA:
-            case LDY:
-            case DEX:
-            case DEY:
-            case INX:
-            case INY:
-            case ROL:
-            case ROR:
-            case ASL:
-            case TAX:
-            case TAY:
-            case TSX:
-            case TXA:
-            case TYA:
-            case TXS:
-            case NOP:
-            case EOR:
-            case ANC:
-            case ANC_R:
-            default:
-                subCycles = 2;
-                break;
-        }
+    if (resetCPU) {
+        subCycle = 0;
+        recievedInterrupt = true;
     }
-    doInstruction();
+    if (subCycle == 0) {
+        // TODO: full instruction decoding logic
+        t = recievedInterrupt;
+        if (recievedInterrupt) instruction = BRK;
+        else instruction = memory.read(pc);
+        pc++;
+    } else doInstruction();
+    if (subCycle == FINISHED_INSTRUCTION)
+        recievedInterrupt = recievedNMI || recievedIRQ;
+    subCycle++;
 }
 
+// Instruction Macros
+
+#define macro_impl(inst) {\
+    memory.read(pc);\
+    inst;\
+    subCycle = FINISHED_INSTRUCTION;\
+    return;}
+
+#define macro_imm(inst) {\
+    t = memory.read(pc);\
+    inst;\
+    pc++;\
+    subCycle = FINISHED_INSTRUCTION;\
+    return;}
+
+#define macro_zero_read(inst) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t = memory.read(t);\
+            inst;\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }
+
+#define macro_zero_indexed_read(inst, index) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            memory.read(t);\
+            t += index;\
+            return;\
+        }\
+        case 3: {\
+            t = memory.read(t);\
+            inst;\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }
+
 void CPU::doInstruction() {
-    switch (instruction) { // TODO: implement instructions
-        case LDA_AX:
-        case LDA_AY: {
-            switch (subCycles) {
-                case 9:
-                    subCycles = 1;
+    // TODO: implement instructions
+    // https://www.nesdev.org/6502_cpu.txt
+    switch (instruction) {
+        case BRK: {
+            // TODO: do this right
+            switch (subCycle) {
+                case 1: {
+                    memory.read(pc);
                     break;
-                case 3:
-                    t16 = memory.read(pc + 1);
+                }
+                case 2: {
+                    t = status;
+                    if (recievedNMI || resetCPU) t = 0;
+                    if (t & 0b00010000) stackPush(pc >> 8);
                     break;
-                case 2:
-                    t16 += memory.read(pc + 2) << 8;
+                }
+                case 3: {
+                    if (t & 0b00010000) stackPush(pc & 0xff);
                     break;
-                case 1:
-                    t = t16 >> 8;
-                    if (instruction == LDA_AX) t16 += x;
-                    else t16 += y;
-                    if (t != t16 >> 8) subCycles = 10;
-                    accumulator = memory.read(t16);
-                    updateZN(accumulator);
-                    pc += 3;
+                }
+                case 4: {
+                    if (t & 0b00010000) stackPush(status);
                     break;
+                }
+                case 5: {
+                    if (resetCPU) t = memory.read(0xfffc);
+                    else if (recievedNMI) {
+                        t = memory.read(0xfffa);
+                    } else t = memory.read(0xfffe); // IRQ or BRK
+                }
+                case 6: {
+                    if (resetCPU) pc = memory.read(0xfffd) << 8 | t;
+                    else if (recievedNMI) {
+                        pc = memory.read(0xfffb) << 8 | t;
+                    } else pc = memory.read(0xffff) << 8 | t; // IRQ or BRK
+                    recievedInterrupt = false;
+                    subCycle = FINISHED_INSTRUCTION;
+                    break;
+                }
             }
-            break;
-        }
-        case LAX_AY: {
-            switch (subCycles) {
-                case 9:
-                    subCycles = 1;
-                    break;
-                case 3:
-                    t16 = memory.read(pc + 1);
-                    break;
-                case 2:
-                    t16 += memory.read(pc + 2) << 8;
-                    break;
-                case 1:
-                    t = t16 >> 8;
-                    t16 += y;
-                    if (t != t16 >> 8) subCycles = 10;
-                    x = memory.read(t16);
-                    accumulator = x;
-                    updateZN(x);
-                    pc += 3;
-                    break;
-            }
-            break;
-        }
-        case LDX_AY: {
-            switch (subCycles) {
-                case 9:
-                    subCycles = 1;
-                    break;
-                case 3:
-                    t16 = memory.read(pc + 1);
-                    break;
-                case 2:
-                    t16 += memory.read(pc + 2) << 8;
-                    break;
-                case 1:
-                    t = t16 >> 8;
-                    t16 += y;
-                    if (t != t16 >> 8) subCycles = 10;
-                    x = memory.read(t16);
-                    updateZN(x);
-                    pc += 3;
-                    break;
-            }
-            break;
-        }
-        case LDY_AX: {
-            switch (subCycles) {
-                case 9:
-                    subCycles = 1;
-                    break;
-                case 3:
-                    t16 = memory.read(pc + 1);
-                    break;
-                case 2:
-                    t16 += memory.read(pc + 2) << 8;
-                    break;
-                case 1:
-                    t = t16 >> 8;
-                    t16 += x;
-                    if (t != t16 >> 8) subCycles = 10;
-                    y = memory.read(t16);
-                    updateZN(y);
-                    pc += 3;
-                    break;
-            }
-            break;
-        }
-        case LDA_A: {
-            switch (subCycles) {
-                case 3:
-                    t16 = memory.read(pc + 1);
-                    break;
-                case 2:
-                    t16 += memory.read(pc + 2) << 8;
-                    break;
-                case 1:
-                    accumulator = memory.read(t16);
-                    updateZN(accumulator);
-                    pc += 3;
-                    break;
-            }
-            break;
-        }
-        case LAX_A: {
-            switch (subCycles) {
-                case 3:
-                    t16 = memory.read(pc + 1);
-                    break;
-                case 2:
-                    t16 += memory.read(pc + 2) << 8;
-                    break;
-                case 1:
-                    x = memory.read(t16);
-                    accumulator = x;
-                    updateZN(x);
-                    pc += 3;
-                    break;
-            }
-            break;
-        }
-        case LDX_A: {
-            switch (subCycles) {
-                case 3:
-                    t16 = memory.read(pc + 1);
-                    break;
-                case 2:
-                    t16 += memory.read(pc + 2) << 8;
-                    break;
-                case 1:
-                    x = memory.read(t16);
-                    updateZN(x);
-                    pc += 3;
-                    break;
-            }
-            break;
-        }
-        case LDY_A: {
-            switch (subCycles) {
-                case 3:
-                    t16 = memory.read(pc + 1);
-                    break;
-                case 2:
-                    t16 += memory.read(pc + 2) << 8;
-                    break;
-                case 1:
-                    y = memory.read(t16);
-                    updateZN(y);
-                    pc += 3;
-                    break;
-            }
-            break;
-        }
-        case LDA_0X:
-        case LDA_0: {
-            if (subCycles == 1) {
-                t = memory.read(pc + 1);
-                if (instruction == LDA_0X) t += x;
-                accumulator = memory.read(t);
-                updateZN(accumulator);
-                pc += 2;
-            }
-            break;
-        }
-        case LDX_0Y:
-        case LDX_0: {
-            if (subCycles == 1) {
-                t = memory.read(pc + 1);
-                if (instruction == LDX_0Y) t += y;
-                x = memory.read(t);
-                updateZN(x);
-                pc += 2;
-            }
-            break;
-        }
-        case LAX_0Y:
-        case LAX_0: {
-            if (subCycles == 1) {
-                t = memory.read(pc + 1);
-                if (instruction == LAX_0Y) t += y;
-                x = memory.read(t);
-                accumulator = x;
-                updateZN(x);
-                pc += 2;
-            }
-            break;
-        }
-        case LDY_0X:
-        case LDY_0: {
-            if (subCycles == 1) {
-                t = memory.read(pc + 1);
-                if (instruction == LDY_0X) t += x;
-                y = memory.read(t);
-                updateZN(y);
-                pc += 2;
-            }
-            break;
-        }
-        case STA_0X:
-        case STA_0: {
-            if (subCycles == 1) {
-                t = memory.read(pc + 1);
-                if (instruction == LDA_0X) t += x;
-                writeback.location = t;
-                writeback.data = accumulator;
-                writeback.needsWrite = true;
-                pc += 2;
-            }
-            break;
-        }
-        case STX_0Y:
-        case STX_0: {
-            if (subCycles == 1) {
-                t = memory.read(pc + 1);
-                if (instruction == LDX_0Y) t += y;
-                writeback.location = t;
-                writeback.data = x;
-                writeback.needsWrite = true;
-                pc += 2;
-            }
-            break;
-        }
-        case STY_0X:
-        case STY_0: {
-            if (subCycles == 1) {
-                t = memory.read(pc + 1);
-                if (instruction == LDY_0X) t += x;
-                writeback.location = t;
-                writeback.data = y;
-                writeback.needsWrite = true;
-                pc += 2;
-            }
-            break;
-        }
-        case LDA: {
-            if (subCycles == 1) {
-                accumulator = memory.read(pc + 1);
-                updateZN(accumulator);
-                pc += 2;
-            }
-            break;
-        }
-        case LDX: {
-            if (subCycles == 1) {
-                x = memory.read(pc + 1);
-                updateZN(x);
-                pc += 2;
-            }
-            break;
-        }
-        case LDY: {
-            if (subCycles == 1) {
-                y = memory.read(pc + 1);
-                updateZN(y);
-                pc += 2;
-            }
-            break;
-        }
-        case LXA: {
-            if (subCycles == 1) {
-                t = memory.read(pc + 1);
-                x = (accumulator | magic) & t;
-                accumulator = x;
-                updateZN(x);
-                pc += 2;
-            }
-            break;
-        }
-        case TAX: {
-            if (subCycles == 1) {
-                x = accumulator;
-                updateZN(accumulator);
-                pc++;
-            }
-            break;
-        }
-        case TAY: {
-            if (subCycles == 1) {
-                y = accumulator;
-                updateZN(accumulator);
-                pc++;
-            }
-            break;
-        }
-        case TSX: {
-            if (subCycles == 1) {
-                x = stack;
-                updateZN(x);
-                pc++;
-            }
-            break;
-        }
-        case TXA: {
-            if (subCycles == 1) {
-                accumulator = x;
-                updateZN(accumulator);
-                pc++;
-            }
-            break;
-        }
-        case TYA: {
-            if (subCycles == 1) {
-                accumulator = y;
-                updateZN(accumulator);
-                pc++;
-            }
-            break;
-        }
-        case TXS: {
-            if (subCycles == 1) {
-                stack = x;
-                pc++;
-            }
-            break;
-        }
-        case EOR: {
-            if (subCycles == 1) {
-                accumulator ^= memory.read(pc + 1);
-                updateZN(accumulator);
-                pc += 2;
-            }
-        }
-        case EOR_0X:
-        case EOR_0: {
-            if (subCycles == 1) {
-                t = memory.read(pc + 1);
-                if (instruction == EOR_0X) t += x;
-                accumulator ^= memory.read(t);
-                updateZN(accumulator);
-                pc += 2;
-            }
+            return;
         }
         case ASL:
         case ROL: {
-            if (subCycles == 1) {
-                bool c = statusC;
-                if (accumulator & 0x80) setStatusC;
-                else clearStatusC;
-                accumulator = accumulator << 1;
-                if ((instruction == ROL) && c) accumulator |= 0x01;
-                updateZN(accumulator);
-                pc++;
-            }
-            break;
+            memory.read(pc);
+            if (accumulator & 0x80) t = true;
+            else t = false;
+            accumulator <<= 1;
+            if (instruction == ROL && statusC) accumulator |= 1;
+            if (t) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+            subCycle = FINISHED_INSTRUCTION;
+            return;
         }
-        case LSR:
         case ROR: {
-            if (subCycles == 1) {
-                bool c = statusC;
-                if (accumulator & 0x01) setStatusC;
-                else clearStatusC;
-                accumulator = accumulator >> 1;
-                if ((instruction == ROR) && c) accumulator |= 0x80;
-                updateZN(accumulator);
-                pc++;
-            }
-            break;
+            memory.read(pc);
+            if (accumulator & 1) t = true;
+            else t = false;
+            accumulator >>= 1;
+            if (statusC) accumulator |= 0x80;
+            if (t) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+            subCycle = FINISHED_INSTRUCTION;
+            return;
         }
-        case JMP_I:
-        case JMP: {
-            switch (subCycles) {
-                case 2:
-                    t = memory.read(pc + 1);
-                    break;
-                case 1:
-                    if (instruction == JMP_I) pc += memory.read(pc + 2) << 8;
-                    else pc = memory.read(pc + 2) << 8;
-                    pc += t;
-                    break;
-            }
-            break;
-        }
-        case JSR: {
-            switch (subCycles) {
-                case 4:
-                    stackPush((pc + 2) >> 8);
-                    break;
-                case 3:
-                    stackPush((pc + 2) & 0xff);
-                    instruction = JMP; // size optimization
-                    break;
-            }
-            break;
-        }
-        case RTS: {
-            switch (subCycles) {
-                case 3:
-                    pc = stackPop();
-                    break;
-                case 2:
-                    pc |= stackPop() << 8;
-                    break;
-                case 1:
-                    pc++;
-                    break;
-            }
-            break;
-        }
-        case SEI: {
-            if (subCycles == 1) {
-                setStatusI;
-                pc++;
-            }
-            break;
-        }
-        case SEC: {
-            if (subCycles == 1) {
-                setStatusC;
-                pc++;
-            }
-            break;
-        }
-        case SED: {
-            if (subCycles == 1) {
-                setStatusD;
-                pc++;
-            }
-            break;
-        }
-        case CLI: {
-            if (subCycles == 1) {
-                clearStatusI;
-                pc++;
-            }
-            break;
-        }
-        case CLC: {
-            if (subCycles == 1) {
-                clearStatusC;
-                pc++;
-            }
-            break;
-        }
-        case CLD: {
-            if (subCycles == 1) {
-                clearStatusD;
-                pc++;
-            }
-            break;
-        }
-        case CLV: {
-            if (subCycles == 1) {
-                clearStatusV;
-                pc++;
-            }
-            break;
-        }
-        case DEX: {
-            if (subCycles == 1) {
-                x--;
-                updateZN(x);
-                pc++;
-            }
-            break;
-        }
-        case DEY: {
-            if (subCycles == 1) {
-                y--;
-                updateZN(y);
-                pc++;
-            }
-            break;
-        }
-        case INX: {
-            if (subCycles == 1) {
-                x++;
-                updateZN(x);
-                pc++;
-            }
-            break;
-        }
-        case INY: {
-            if (subCycles == 1) {
-                y++;
-                updateZN(y);
-                pc++;
-            }
-            break;
-        }
-        case PHA: {
-            if (subCycles == 1) {
-                stackPush(accumulator);
-                pc++;
-            }
-            break;
-        }
-        case PHP: {
-            if (subCycles == 1) {
-                stackPush(status | 0b00110000);
-                pc++;
-            }
-            break;
-        }
-        case PLA: {
-            if (subCycles == 1) {
-                accumulator = stackPop();
-                pc++;
-            }
-            break;
-        }
-        case PLP: {
-            if (subCycles == 1) {
-                status = stackPop() | 0b00110000;
-                pc++;
-            }
-            break;
-        }
-        case BRK: {
-            switch (subCycles) {
-                case 5:
-                    stackPush((pc + 2) >> 8);
-                    break;
-                case 4:
-                    stackPush((pc + 2) & 0xff);
-                    break;
-                case 3:
-                    stackPush(status | 0b00110000);
-                    break;
-                case 2:
-                    if (recievedNMI)
-                        t = 0xfa;
-                    else // IRQ or BRK
-                        t = 0xfe;
-                    pc = memory.read(0xff00 + t);
-                    break;
-                case 1:
-                    pc = pc | (memory.read(0xff01 + t) << 8);
-                    break;
-                default:
-                    break;
-            }
-            break;
-        }
-        case RTI: {
-            switch (subCycles) {
-                case 3:
-                    status = stackPop() | 0b00110000;
-                    break;
-                case 2:
-                    pc = stackPop();
-                    break;
-                case 1:
-                    pc |= stackPop() << 8;
-                    break;
-                default:
-                    break;
-            }
-            break;
-        }
-        case AND: {
-            if (subCycles == 1) {
-                accumulator &= memory.read(pc + 1);
-                updateZN(accumulator);
-                pc += 2;
-            }
+        case INX: macro_impl(x++; updateZN(x));
+        case INY: macro_impl(y++; updateZN(y));
+        case DEX: macro_impl(x--; updateZN(x));
+        case DEY: macro_impl(y--; updateZN(y));
+        case CLC: macro_impl(clearStatusC);
+        case CLD: macro_impl(clearStatusD);
+        case CLI: macro_impl(clearStatusI);
+        case CLV: macro_impl(clearStatusV);
+        case SEC: macro_impl(setStatusC);
+        case SED: macro_impl(setStatusD);
+        case SEI: macro_impl(setStatusI);
+        case TAX: macro_impl(x = accumulator; updateZN(accumulator));
+        case TAY: macro_impl(y = accumulator; updateZN(accumulator));
+        case TSX: macro_impl(x = stack; updateZN(x));
+        case TXS: macro_impl(stack = x);
+        case TXA: macro_impl(accumulator = x; updateZN(accumulator));
+        case TYA: macro_impl(accumulator = y; updateZN(accumulator));
+        case ADC:
+        case SBC: macro_imm({
+            if (instruction == SBC) t = ~t;
+            t16 = accumulator;
+            t16 += t;
+            if (statusC) t16++;
+            if (t16 & 0xff00) setStatusC;
+            else clearStatusC;
+            // TODO: overflow flag
+            accumulator = t16 & 0xff;
+        });
+        case AND: macro_imm(accumulator &= t; updateZN(accumulator));
+        case AND_0: macro_zero_read(accumulator &= t; updateZN(accumulator));
+        case AND_0X: macro_zero_indexed_read(accumulator &= t; updateZN(accumulator), x);
+        case ORA: macro_imm(accumulator |= t; updateZN(accumulator));
+        case ORA_0: macro_zero_read(accumulator |= t; updateZN(accumulator));
+        case ORA_0X: macro_zero_indexed_read(accumulator |= t; updateZN(accumulator), x);
+        case CMP: macro_imm({
+            updateZN(accumulator - t);
+            if (statusN) clearStatusC;
+            else setStatusC;
+        });
+        case CPX: macro_imm({
+            updateZN(x - t);
+            if (statusN) clearStatusC;
+            else setStatusC;
+        });
+        case CPY: macro_imm({
+            updateZN(y - t);
+            if (statusN) clearStatusC;
+            else setStatusC;
+        });
+        case EOR: macro_imm(accumulator ^= t; updateZN(accumulator));
+        case LDA: macro_imm(accumulator = t; updateZN(t));
+        case LDX: macro_imm(x = t; updateZN(t));
+        case LDY: macro_imm(y = t; updateZN(t));
+        case LXA: macro_imm(x = (accumulator | MAGIC) & t; accumulator = x; updateZN(x));
+        case ALR: {
+            accumulator &= memory.read(pc);
+            if (accumulator & 1) t = true;
+            else t = false;
+            accumulator >>= 1;
+            if (t) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+            subCycle = FINISHED_INSTRUCTION;
+            return;
         }
         case ANC:
         case ANC_R: {
-            if (subCycles == 1) {
-                accumulator &= memory.read(pc + 1);
-                updateZN(accumulator);
-                if (statusN) setStatusC;
-                else clearStatusC;
-                pc += 2;
-            }
+            accumulator &= memory.read(pc);
+            if (accumulator & 0x80) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+            subCycle = FINISHED_INSTRUCTION;
+            return;
         }
-        case 0x02: // JAM
-        case 0x12: // JAM
-        case 0x22: // JAM
-        case 0x32: // JAM
-        case 0x42: // JAM
-        case 0x52: // JAM
-        case 0x62: // JAM
-        case 0x72: // JAM
-        case 0x92: // JAM
-        case 0xB2: // JAM
-        case 0xD2: // JAM
-        case 0xF2: // JAM
-            return; // Prevent the CPU from continuing
-        case 0x0C: // 3-byte NOP
-        case 0x1C: // 3-byte NOP
-        case 0x3C: // 3-byte NOP
-        case 0x5C: // 3-byte NOP
-        case 0x7C: // 3-byte NOP
-        case 0xDC: // 3-byte NOP
-        case 0xFC: // 3-byte NOP
-            if (subCycles == 1) pc += 3;
-            break;
-        case 0x04: // 2-byte NOP
-        case 0x14: // 2-byte NOP
-        case 0x34: // 2-byte NOP
-        case 0x44: // 2-byte NOP
-        case 0x54: // 2-byte NOP
-        case 0x64: // 2-byte NOP
-        case 0x74: // 2-byte NOP
-        case 0x80: // 2-byte NOP
-        case 0x82: // 2-byte NOP
-        case 0x89: // 2-byte NOP
-        case 0xC2: // 2-byte NOP
-        case 0xD4: // 2-byte NOP
-        case 0xE2: // 2-byte NOP
-        case 0xF4: // 2-byte NOP
-            if (subCycles == 1) pc += 2;
-            break;
-        case NOP:
-        default: // Assumed 1-byte NOP
-            if (subCycles == 1) pc++;
-            break;
+        case XAA: macro_imm(accumulator = (accumulator | MAGIC) & x & t; updateZN(accumulator));
+        case ARR: {
+            accumulator &= memory.read(pc);
+            if (accumulator & 0x80) t = true;
+            else t = false;
+            accumulator >>= 1;
+            if (statusC) accumulator |= 0x80;
+            if (t) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+            subCycle = FINISHED_INSTRUCTION;
+            return;
+        }
+        case 0x1A:
+        case 0x3A:
+        case 0x5A:
+        case 0x7A:
+        case 0xDA: // Implied NOP
+        case 0xFA: macro_impl();
+        case 0x80:
+        case 0x82:
+        case 0x89:
+        case 0xC2: // Immediate NOP
+        case 0xE2: macro_imm();
+        case 0x04:
+        case 0x44: // Zeropage NOP
+        case 0x64: macro_zero_read();
+        case 0x14:
+        case 0x34:
+        case 0x54:
+        case 0x74:
+        case 0xD4: // Zeropage Indexed NOP
+        case 0xF4: macro_zero_indexed_read(,0);
+        case 0x02:
+        case 0x12:
+        case 0x22:
+        case 0x32:
+        case 0x42:
+        case 0x52:
+        case 0x62:
+        case 0x72:
+        case 0x92:
+        case 0xB2:
+        case 0xD2:
+        case 0xF2: { // JAM
+            subCycle = 50;
+            return;
+        }
     }
-    subCycles--;
-}
-
-void CPU::doWriteback() {
-    if (writeback.needsWrite) {
-        memory.write(writeback.location, writeback.data);
-    }
-    writeback.needsWrite = false;
 }
 
 void CPU::stackPush(u8 value) {
-    writeback.needsWrite = true;
-    writeback.location = 0x100 + stack;
-    writeback.data = value;
+    memory.write(0x100 + stack, value);
     stack--;
 }
 

@@ -19,6 +19,7 @@ public:
     u8 read(u16 location);
     void write(u16 location, u8 value);
     u8 readPPU(u16 location);
+    void writePPU(u16 location, u8 value);
     NROM(u8* rom);
     ~NROM();
 };

@@ -16,14 +16,16 @@
 
 class MemoryMapCPU : Memory {
 private:
-    PPU &ppu;
-    Cartridge &cart;
+    PPU *ppu;
+    Cartridge *cart;
     RAM ram;
+    u8 ppuAddrHi, ppuAddrLo;
+    bool ppuAddr;
 public:
     u8 read(u16 location);
     void write(u16 location, u8 value);
-    void attachCart(Cartridge &cartridge);
-    void attachPPU(PPU &ppuToAttach);
+    void attachCart(Cartridge *cartridge);
+    void attachPPU(PPU *ppuToAttach);
     MemoryMapCPU();
 };
 

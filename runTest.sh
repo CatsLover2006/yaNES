@@ -9,5 +9,5 @@ if [[ -z "${clangpp}" ]]; then
     echo "Could not find C++ compiler; we can't continue!"
 else
     echo "C++ compiler: ${clangpp}"
-    ${clangpp} -lcriterion --std=c++14 *.cpp */*.cpp -o Test && echo "Running tests..." && ./Test
+    ${clangpp} -lcriterion --std=c++11 *.cpp */*.cpp -o Test && echo "Running tests..." && ./Test
 fi

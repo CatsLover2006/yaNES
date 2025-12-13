@@ -11,27 +11,35 @@
 #define InstructionSet_6502_h
 
 #define BRK     0x00
+#define ORA_0   0x05
 #define PHP     0x08
+#define ORA     0x09
 #define ASL     0x0A
 #define ANC     0x0B // Illegal Opcode
+#deinne ORA_0X  0x15
 #define CLC     0x18
+#define AND_0   0x25
 #define PLP     0x28
 #define AND     0x29
 #define ROL     0x2A
 #define ANC_R   0x2B // Illegal Opcode
 #define JSR     0x30
+#define AND_0X  0x35
 #define SEC     0x38
 #define RTI     0x40
 #define EOR_0   0x45
 #define PHA     0x48
 #define EOR     0x49
 #define LSR     0x4A
+#define ALR     0x4B // Illegal Opcode
 #define JMP     0x4C
 #define EOR_0X  0x55
 #define CLI     0x58
 #define RTS     0x60
 #define PLA     0x68
+#define ADC     0x69
 #define ROR     0x6A
+#define ARR     0x6B // Illegal Opcode
 #define JMP_I   0x6C
 #define SEI     0x78
 #define STY_0   0x84
@@ -39,6 +47,7 @@
 #define STX_0   0x86
 #define DEY     0x88
 #define TXA     0x8A
+#define XAA     0x8B // Illegal Opcode
 #define STY_0X  0x94
 #define STA_0X  0x95
 #define STX_0Y  0x96
@@ -69,10 +78,14 @@
 #define LDA_AX  0xBD
 #define LDX_AY  0xBE
 #define LAX_AY  0xBF // Illegal Opcode
+#define CPY     0xC0
 #define DEX     0xCA
 #define INY     0xC8
+#define CMP     0xC9
 #define CLD     0xD8
+#define CPX     0xE0
 #define INX     0xE8
+#define SBC     0xE9
 #define NOP     0xEA
 #define SED     0xF8
 

@@ -371,8 +371,10 @@ void CPU::doInstruction() {
             if (statusC) t16++;
             if (t16 & 0xff00) setStatusC;
             else clearStatusC;
-            // TODO: overflow flag
-            accumulator = t16 & 0xff;
+            t16 &= 0x00ff;
+            if ((accumulator ^ t16) & (t ^ t16) & 0x80) setStatusV;
+            else clearStatusV;
+            accumulator = t16;
         });
         case AND: macro_imm(accumulator &= t; updateZN(accumulator));
         case ORA: macro_imm(accumulator |= t; updateZN(accumulator));
@@ -404,7 +406,9 @@ void CPU::doInstruction() {
             if (statusC) t16++;
             if (t16 & 0xff00) setStatusC;
             else clearStatusC;
-            // TODO: overflow flag
+            t16 &= 0x00ff;
+            if ((accumulator ^ t16) & (t ^ t16) & 0x80) setStatusV;
+            else clearStatusV;
             accumulator = t16 & 0xff;
         });
         case AND_0: macro_zero_read(accumulator &= t; updateZN(accumulator));
@@ -437,7 +441,9 @@ void CPU::doInstruction() {
             if (statusC) t16++;
             if (t16 & 0xff00) setStatusC;
             else clearStatusC;
-            // TODO: overflow flag
+            t16 &= 0x00ff;
+            if ((accumulator ^ t16) & (t ^ t16) & 0x80) setStatusV;
+            else clearStatusV;
             accumulator = t16 & 0xff;
         }, x);
         case AND_0X: macro_zero_indexed_read(accumulator &= t; updateZN(accumulator), x);
@@ -460,7 +466,9 @@ void CPU::doInstruction() {
             if (statusC) t16++;
             if (t16 & 0xff00) setStatusC;
             else clearStatusC;
-            // TODO: overflow flag
+            t16 &= 0x00ff;
+            if ((accumulator ^ t16) & (t ^ t16) & 0x80) setStatusV;
+            else clearStatusV;
             accumulator = t16 & 0xff;
         });
         case AND_A: macro_abs_read(accumulator &= t; updateZN(accumulator));
@@ -493,7 +501,9 @@ void CPU::doInstruction() {
             if (statusC) t16++;
             if (t16 & 0xff00) setStatusC;
             else clearStatusC;
-            // TODO: overflow flag
+            t16 &= 0x00ff;
+            if ((accumulator ^ t16) & (t ^ t16) & 0x80) setStatusV;
+            else clearStatusV;
             accumulator = t16 & 0xff;
         }, x);
         case AND_AX: macro_abs_indexed_read(accumulator &= t; updateZN(accumulator), x);
@@ -516,7 +526,9 @@ void CPU::doInstruction() {
             if (statusC) t16++;
             if (t16 & 0xff00) setStatusC;
             else clearStatusC;
-            // TODO: overflow flag
+            t16 &= 0x00ff;
+            if ((accumulator ^ t16) & (t ^ t16) & 0x80) setStatusV;
+            else clearStatusV;
             accumulator = t16 & 0xff;
         }, y);
         case AND_AY: macro_abs_indexed_read(accumulator &= t; updateZN(accumulator), y);

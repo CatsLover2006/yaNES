@@ -153,36 +153,83 @@ void CPU::doCycle() {
         }\
     }
 
+#define macro_abs_read(inst) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t16 = memory.read(pc) << 8 | t;\
+            pc++;\
+            return;\
+        }\
+        case 3: {\
+            t = memory.read(t16);\
+            inst;\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }
+
+#define macro_abs_indexed_read(inst, index) {\
+    switch(subCycle) {\
+        case 1: {\
+            t16 = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t = memory.read(pc);\
+            t16 += t << 8;\
+            pc++;\
+            return;\
+        }\
+        case 3: {\
+            t16 += index;\
+            if (t16 >> 8 != t) {\
+                memory.read(t16 - 0x0100);\
+                return;\
+            }\
+        }\
+        case 4: {\
+            t = memory.read(t16);\
+            inst;\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }
 void CPU::doInstruction() {
     // TODO: implement instructions
     // https://www.nesdev.org/6502_cpu.txt
     switch (instruction) {
-        case BRK: {
-            // TODO: do this right
+        case BRK: // TODO: do this right
             switch (subCycle) {
                 case 1: {
                     memory.read(pc);
-                    break;
+                    return;
                 }
                 case 2: {
                     t = status;
                     if (recievedNMI || resetCPU) t = 0;
                     if (t & 0b00010000) stackPush(pc >> 8);
-                    break;
+                    return;
                 }
                 case 3: {
                     if (t & 0b00010000) stackPush(pc & 0xff);
-                    break;
+                    return;
                 }
                 case 4: {
                     if (t & 0b00010000) stackPush(status);
-                    break;
+                    return;
                 }
                 case 5: {
                     if (resetCPU) t = memory.read(0xfffc);
                     else if (recievedNMI) {
                         t = memory.read(0xfffa);
                     } else t = memory.read(0xfffe); // IRQ or BRK
+                    return;
                 }
                 case 6: {
                     if (resetCPU) pc = memory.read(0xfffd) << 8 | t;
@@ -191,14 +238,96 @@ void CPU::doInstruction() {
                     } else pc = memory.read(0xffff) << 8 | t; // IRQ or BRK
                     recievedInterrupt = false;
                     subCycle = FINISHED_INSTRUCTION;
-                    break;
+                    return;
                 }
             }
-            return;
-        }
+        case PHA:
+            switch (subCycle) {
+                case 1: {
+                    memory.read(pc);
+                    return;
+                }
+                case 2: {
+                    stackPush(accumulator);
+                    subCycle = FINISHED_INSTRUCTION;
+                    return;
+                }
+            }
+        case PHP:
+            switch (subCycle) {
+                case 1: {
+                    memory.read(pc);
+                    return;
+                }
+                case 2: {
+                    stackPush(sp | 0x30);
+                    subCycle = FINISHED_INSTRUCTION;
+                    return;
+                }
+            }
+        case PLA:
+            switch (subCycle) {
+                case 1: {
+                    memory.read(pc);
+                    return;
+                }
+                case 3: {
+                    accumulator = stackPop();
+                    subCycle = FINISHED_INSTRUCTION;
+                    return;
+                }
+            }
+        case PLP:
+            switch (subCycle) {
+                case 1: {
+                    memory.read(pc);
+                    return;
+                }
+                case 3: {
+                    sp = stackPop() & 0xCF;
+                    subCycle = FINISHED_INSTRUCTION;
+                    return;
+                }
+            }
+        case JMP:
+            switch (subCycle) {
+                case 1: {
+                    t = memory.read(pc);
+                    pc++;
+                    return;
+                }
+                case 2: {
+                    pc = memory.read(pc) << 8 + t;
+                    subCycle = FINISHED_INSTRUCTION;
+                    return;
+                }
+            }
+        case JMP_I:
+            switch (subCycle) {
+                case 1: {
+                    t = memory.read(pc);
+                    pc++;
+                    return;
+                }
+                case 2: {
+                    t16 = memory.read(pc) << 8 + t;
+                    return;
+                }
+                case 3: {
+                    t = memory.read(t16);
+                    return;
+                }
+                case 4: {
+                    pc = t16;
+                    t16++;
+                    if (t16 & 0xff00 != pc & 0xff00) t16 -= 0x0100;
+                    pc = memory.read(t16) << 8 + t;
+                    subCycle = FINISHED_INSTRUCTION;
+                    return;
+                }
+            }
         case ASL:
-        case ROL: {
-            memory.read(pc);
+        case ROL: macro_impl({
             if (accumulator & 0x80) t = true;
             else t = false;
             accumulator <<= 1;
@@ -206,11 +335,8 @@ void CPU::doInstruction() {
             if (t) setStatusC;
             else clearStatusC;
             updateZN(accumulator);
-            subCycle = FINISHED_INSTRUCTION;
-            return;
-        }
-        case ROR: {
-            memory.read(pc);
+        });
+        case ROR: macro_impl({
             if (accumulator & 1) t = true;
             else t = false;
             accumulator >>= 1;
@@ -218,9 +344,7 @@ void CPU::doInstruction() {
             if (t) setStatusC;
             else clearStatusC;
             updateZN(accumulator);
-            subCycle = FINISHED_INSTRUCTION;
-            return;
-        }
+        });
         case INX: macro_impl(x++; updateZN(x));
         case INY: macro_impl(y++; updateZN(y));
         case DEX: macro_impl(x--; updateZN(x));
@@ -239,8 +363,9 @@ void CPU::doInstruction() {
         case TXA: macro_impl(accumulator = x; updateZN(accumulator));
         case TYA: macro_impl(accumulator = y; updateZN(accumulator));
         case ADC:
-        case SBC: macro_imm({
-            if (instruction == SBC) t = ~t;
+        case SBC:
+        case USBC: macro_imm({
+            if (instruction != ADC) t = ~t;
             t16 = accumulator;
             t16 += t;
             if (statusC) t16++;
@@ -250,11 +375,7 @@ void CPU::doInstruction() {
             accumulator = t16 & 0xff;
         });
         case AND: macro_imm(accumulator &= t; updateZN(accumulator));
-        case AND_0: macro_zero_read(accumulator &= t; updateZN(accumulator));
-        case AND_0X: macro_zero_indexed_read(accumulator &= t; updateZN(accumulator), x);
         case ORA: macro_imm(accumulator |= t; updateZN(accumulator));
-        case ORA_0: macro_zero_read(accumulator |= t; updateZN(accumulator));
-        case ORA_0X: macro_zero_indexed_read(accumulator |= t; updateZN(accumulator), x);
         case CMP: macro_imm({
             updateZN(accumulator - t);
             if (statusN) clearStatusC;
@@ -275,6 +396,138 @@ void CPU::doInstruction() {
         case LDX: macro_imm(x = t; updateZN(t));
         case LDY: macro_imm(y = t; updateZN(t));
         case LXA: macro_imm(x = (accumulator | MAGIC) & t; accumulator = x; updateZN(x));
+        case ADC_0:
+        case SBC_0: macro_zero_read({
+            if (instruction == SBC_0) t = ~t;
+            t16 = accumulator;
+            t16 += t;
+            if (statusC) t16++;
+            if (t16 & 0xff00) setStatusC;
+            else clearStatusC;
+            // TODO: overflow flag
+            accumulator = t16 & 0xff;
+        });
+        case AND_0: macro_zero_read(accumulator &= t; updateZN(accumulator));
+        case ORA_0: macro_zero_read(accumulator |= t; updateZN(accumulator));
+        case CMP_0: macro_zero_read({
+            updateZN(accumulator - t);
+            if (statusN) clearStatusC;
+            else setStatusC;
+        });
+        case CPX_0: macro_zero_read({
+            updateZN(x - t);
+            if (statusN) clearStatusC;
+            else setStatusC;
+        });
+        case CPY_0: macro_zero_read({
+            updateZN(y - t);
+            if (statusN) clearStatusC;
+            else setStatusC;
+        });
+        case EOR_0: macro_zero_read(accumulator ^= t; updateZN(accumulator));
+        case LDA_0: macro_zero_read(accumulator = t; updateZN(t));
+        case LDX_0: macro_zero_read(x = t; updateZN(t));
+        case LDY_0: macro_zero_read(y = t; updateZN(t));
+        case LAX_0: macro_zero_read(x = (accumulator | MAGIC) & t; accumulator = x; updateZN(x));
+        case ADC_0X:
+        case SBC_0X: macro_zero_indexed_read({
+            if (instruction == SBC_0) t = ~t;
+            t16 = accumulator;
+            t16 += t;
+            if (statusC) t16++;
+            if (t16 & 0xff00) setStatusC;
+            else clearStatusC;
+            // TODO: overflow flag
+            accumulator = t16 & 0xff;
+        }, x);
+        case AND_0X: macro_zero_indexed_read(accumulator &= t; updateZN(accumulator), x);
+        case ORA_0X: macro_zero_indexed_read(accumulator |= t; updateZN(accumulator), x);
+        case CMP_0X: macro_zero_indexed_read({
+            updateZN(accumulator - t);
+            if (statusN) clearStatusC;
+            else setStatusC;
+        }, x);
+        case EOR_0X: macro_zero_indexed_read(accumulator ^= t; updateZN(accumulator), x);
+        case LDA_0X: macro_zero_indexed_read(accumulator = t; updateZN(t), x);
+        case LDX_0Y: macro_zero_indexed_read(x = t; updateZN(t), y);
+        case LDY_0X: macro_zero_indexed_read(y = t; updateZN(t), x);
+        case LAX_0Y: macro_zero_indexed_read(x = (accumulator | MAGIC) & t; accumulator = x; updateZN(x), y);
+        case ADC_A:
+        case SBC_A: macro_abs_read({
+            if (instruction == SBC_A) t = ~t;
+            t16 = accumulator;
+            t16 += t;
+            if (statusC) t16++;
+            if (t16 & 0xff00) setStatusC;
+            else clearStatusC;
+            // TODO: overflow flag
+            accumulator = t16 & 0xff;
+        });
+        case AND_A: macro_abs_read(accumulator &= t; updateZN(accumulator));
+        case ORA_A: macro_abs_read(accumulator |= t; updateZN(accumulator));
+        case CMP_A: macro_abs_read({
+            updateZN(accumulator - t);
+            if (statusN) clearStatusC;
+            else setStatusC;
+        });
+        case CPX_A: macro_abs_read({
+            updateZN(x - t);
+            if (statusN) clearStatusC;
+            else setStatusC;
+        });
+        case CPY_A: macro_abs_read({
+            updateZN(y - t);
+            if (statusN) clearStatusC;
+            else setStatusC;
+        });
+        case EOR_A: macro_abs_read(accumulator ^= t; updateZN(accumulator));
+        case LDA_A: macro_abs_read(accumulator = t; updateZN(t));
+        case LDX_A: macro_abs_read(x = t; updateZN(t));
+        case LDY_A: macro_abs_read(y = t; updateZN(t));
+        case LAX_A: macro_abs_read(x = (accumulator | MAGIC) & t; accumulator = x; updateZN(x));
+        case ADC_AX:
+        case SBC_AX: macro_abs_indexed_read({
+            if (instruction == SBC_0) t = ~t;
+            t16 = accumulator;
+            t16 += t;
+            if (statusC) t16++;
+            if (t16 & 0xff00) setStatusC;
+            else clearStatusC;
+            // TODO: overflow flag
+            accumulator = t16 & 0xff;
+        }, x);
+        case AND_AX: macro_abs_indexed_read(accumulator &= t; updateZN(accumulator), x);
+        case ORA_AX: macro_abs_indexed_read(accumulator |= t; updateZN(accumulator), x);
+        case CMP_AX: macro_abs_indexed_read({
+            updateZN(accumulator - t);
+            if (statusN) clearStatusC;
+            else setStatusC;
+        }, x);
+        case EOR_AX: macro_abs_indexed_read(accumulator ^= t; updateZN(accumulator), x);
+        case LDA_AX: macro_abs_indexed_read(accumulator = t; updateZN(t), x);
+        case LDX_AY: macro_abs_indexed_read(x = t; updateZN(t), y);
+        case LDY_AX: macro_abs_indexed_read(y = t; updateZN(t), x);
+        case LAX_AY: macro_abs_indexed_read(x = (accumulator | MAGIC) & t; accumulator = x; updateZN(x), y);
+        case ADC_AY:
+        case SBC_AY: macro_abs_indexed_read({
+            if (instruction == SBC_0) t = ~t;
+            t16 = accumulator;
+            t16 += t;
+            if (statusC) t16++;
+            if (t16 & 0xff00) setStatusC;
+            else clearStatusC;
+            // TODO: overflow flag
+            accumulator = t16 & 0xff;
+        }, y);
+        case AND_AY: macro_abs_indexed_read(accumulator &= t; updateZN(accumulator), y);
+        case ORA_AY: macro_abs_indexed_read(accumulator |= t; updateZN(accumulator), y);
+        case CMP_AY: macro_abs_indexed_read({
+            updateZN(accumulator - t);
+            if (statusN) clearStatusC;
+            else setStatusC;
+        }, y);
+        case EOR_AY: macro_abs_indexed_read(accumulator ^= t; updateZN(accumulator), y);
+        case LDA_AY: macro_abs_indexed_read(accumulator = t; updateZN(t), y);
         case ALR: {
             accumulator &= memory.read(pc);
             if (accumulator & 1) t = true;
@@ -327,7 +580,14 @@ void CPU::doInstruction() {
         case 0x54:
         case 0x74:
         case 0xD4: // Zeropage Indexed NOP
-        case 0xF4: macro_zero_indexed_read(,0);
+        case 0xF4: macro_zero_indexed_read(,x);
+        case 0x0C: macro_abs_read(); // Absolute NOP
+        case 0x1C:
+        case 0x3C:
+        case 0x5C:
+        case 0x7C:
+        case 0xDC: // Absolute Indexed NOP
+        case 0xFC: macro_abs_indexed_read(,x);
         case 0x02:
         case 0x12:
         case 0x22:
@@ -336,10 +596,10 @@ void CPU::doInstruction() {
         case 0x52:
         case 0x62:
         case 0x72:
-        case 0x92:
-        case 0xB2:
-        case 0xD2:
-        case 0xF2: { // JAM
+        case 0x92: // JAM
+        case 0xB2: // No need to accurately emulate
+        case 0xD2: // the crash instructions
+        case 0xF2: {
             subCycle = 50;
             return;
         }
@@ -352,7 +612,7 @@ void CPU::stackPush(u8 value) {
 }
 
 u8 CPU::stackPop() {
-    u8 value = memory.read(0x100 + stack);
     stack++;
+    u8 value = memory.read(0x100 + stack);
     return value;
 }

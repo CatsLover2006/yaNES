@@ -36,11 +36,13 @@
 #define EOR_0X  0x55
 #define CLI     0x58
 #define RTS     0x60
+#define ADC_0   0x65
 #define PLA     0x68
 #define ADC     0x69
 #define ROR     0x6A
 #define ARR     0x6B // Illegal Opcode
 #define JMP_I   0x6C
+#define ADC_0X  0x75
 #define SEI     0x78
 #define STY_0   0x84
 #define STA_0   0x85
@@ -84,9 +86,12 @@
 #define CMP     0xC9
 #define CLD     0xD8
 #define CPX     0xE0
+#define SBC_0   0xE5
 #define INX     0xE8
 #define SBC     0xE9
 #define NOP     0xEA
+#define USBC    0xEB // Illegal Opcode
+#define SBC_0X  0xF5
 #define SED     0xF8
 
 #endif /* InstructionSet_h */

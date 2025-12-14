@@ -62,6 +62,7 @@
 #define ARR     0x6B // Illegal Opcode
 #define JMP_I   0x6C
 #define ADC_A   0x6D
+#define ADC_IY  0x71
 #define ADC_0X  0x75
 #define SEI     0x78
 #define ADC_AY  0x79

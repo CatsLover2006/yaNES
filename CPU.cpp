@@ -265,6 +265,156 @@ void CPU::doCycle() {
     }\
 }
 
+#define macro_zero_write(inst) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t16 = t;\
+            inst;\
+            memory.write(t16, t);\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
+#define macro_zero_indexed_write(inst, index) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            memory.read(t);\
+            t += index;\
+            return;\
+        }\
+        case 3: {\
+            t16 = t;\
+            inst;\
+            memory.write(t16, t);\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
+#define macro_abs_write(inst) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t16 = memory.read(pc) << 8 | t;\
+            pc++;\
+            return;\
+        }\
+        case 3: {\
+            t16 = t;\
+            inst;\
+            memory.write(t16, t);\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
+#define macro_abs_indexed_write(inst, index) {\
+    switch(subCycle) {\
+        case 1: {\
+            t16 = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t = memory.read(pc);\
+            t16 += t << 8;\
+            pc++;\
+            return;\
+        }\
+        case 3: {\
+            t16 += index;\
+            if (t16 >> 8 != t) {\
+                memory.read(t16 - 0x0100);\
+                return;\
+            }\
+        }\
+        case 4: {\
+            inst;\
+            memory.write(t16, t);\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
+#define macro_indexed_indirect_write(inst, index) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t = memory.read(t);\
+            t += index;\
+            return;\
+        }\
+        case 3: {\
+            t16 = memory.read(t);\
+            return;\
+        }\
+        case 4: {\
+            t16 += memory.read(t + 1) << 8;\
+            return;\
+        }\
+        case 5: {\
+            inst;\
+            memory.write(t16, t);\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
+#define macro_indirect_indexed_write(inst, index) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t16 = memory.read(t);\
+            return;\
+        }\
+        case 3: {\
+            t16 += memory.read(t + 1) << 8;\
+            return;\
+        }\
+        case 4: {\
+            t16 += index;\
+            if (t16 >> 8 != t) {\
+                memory.read(t16 - 0x0100);\
+                return;\
+            }\
+        }\
+        case 5: {\
+            inst;\
+            memory.write(t16, t);\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
 void CPU::doInstruction() {
     // TODO: implement instructions
     // https://www.nesdev.org/6502_cpu.txt
@@ -569,6 +719,10 @@ void CPU::doInstruction() {
             status |= (t >> 5) & 0x01;
             updateZ(t & accumulator);
         });
+        case STA_0: macro_zero_write(t = accumulator);
+        case STX_0: macro_zero_write(t = x);
+        case STY_0: macro_zero_write(t = y);
+        case SAX_0: macro_zero_write(t = accumulator & x);
         case ADC_0X:
         case SBC_0X: macro_zero_indexed_read({
             if (instruction == SBC_0) t = ~t;
@@ -594,6 +748,10 @@ void CPU::doInstruction() {
         case LDX_0Y: macro_zero_indexed_read(x = t; updateZN(t), y);
         case LDY_0X: macro_zero_indexed_read(y = t; updateZN(t), x);
         case LAX_0Y: macro_zero_indexed_read(x = t; accumulator = x; updateZN(x), y);
+        case STA_0X: macro_zero_indexed_write(t = accumulator, x);
+        case STX_0Y: macro_zero_indexed_write(t = x, y);
+        case STY_0X: macro_zero_indexed_write(t = y, x);
+        case SAX_0Y: macro_zero_indexed_write(t = accumulator & x, y);
         case ADC_A:
         case SBC_A: macro_abs_read({
             if (instruction == SBC_A) t = ~t;
@@ -635,6 +793,10 @@ void CPU::doInstruction() {
             status |= (t >> 5) & 0x01;
             updateZ(t & accumulator);
         });
+        case STA_A: macro_abs_write(t = accumulator);
+        case SAX_A: macro_abs_write(t = accumulator & x);
+        case STX_A: macro_abs_write(t = x);
+        case STY_A: macro_abs_write(t = y);
         case ADC_AX:
         case SBC_AX: macro_abs_indexed_read({
             if (instruction == SBC_0) t = ~t;
@@ -657,6 +819,7 @@ void CPU::doInstruction() {
         }, x);
         case EOR_AX: macro_abs_indexed_read(accumulator ^= t; updateZN(accumulator), x);
         case LDA_AX: macro_abs_indexed_read(accumulator = t; updateZN(t), x);
+        case STA_AX: macro_abs_indexed_write(t = accumulator, x);
         case LDX_AY: macro_abs_indexed_read(x = t; updateZN(t), y);
         case LDY_AX: macro_abs_indexed_read(y = t; updateZN(t), x);
         case LAX_AY: macro_abs_indexed_read(x = t; accumulator = x; updateZN(x), y);
@@ -682,6 +845,7 @@ void CPU::doInstruction() {
         }, y);
         case EOR_AY: macro_abs_indexed_read(accumulator ^= t; updateZN(accumulator), y);
         case LDA_AY: macro_abs_indexed_read(accumulator = t; updateZN(t), y);
+        case STA_AY: macro_abs_indexed_write(t = accumulator, y);
         case ADC_I:
         case SBC_I: macro_indexed_indirect_read({
             if (instruction == SBC_I) t = ~t;
@@ -705,8 +869,10 @@ void CPU::doInstruction() {
         case EOR_I: macro_indexed_indirect_read(accumulator ^= t; updateZN(accumulator), x);
         case LDA_I: macro_indexed_indirect_read(accumulator = t; updateZN(t), x);
         case LAX_I: macro_indexed_indirect_read(x = t; accumulator = x; updateZN(x), x);
+        case STA_I: macro_indexed_indirect_write(t = accumulator, x);
+        case SAX_I: macro_indexed_indirect_write(t = accumulator & x, x);
         case ADC_IY:
-        case SBC_IY: macro_indexed_indirect_read({
+        case SBC_IY: macro_indirect_indexed_read({
             if (instruction == SBC_IY) t = ~t;
             t16 = accumulator;
             t16 += t;
@@ -728,6 +894,7 @@ void CPU::doInstruction() {
         case EOR_IY: macro_indirect_indexed_read(accumulator ^= t; updateZN(accumulator), y);
         case LDA_IY: macro_indirect_indexed_read(accumulator = t; updateZN(t), y);
         case LAX_IY: macro_indirect_indexed_read(x = t; accumulator = x; updateZN(x), y);
+        case STA_IY: macro_indirect_indexed_write(t = accumulator, y);
         case ALR: {
             accumulator &= memory.read(pc);
             if (accumulator & 1) t = true;

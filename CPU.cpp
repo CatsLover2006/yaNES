@@ -131,7 +131,8 @@ void CPU::doCycle() {
             subCycle = FINISHED_INSTRUCTION;\
             return;\
         }\
-    }
+    }\
+}
 
 #define macro_zero_indexed_read(inst, index) {\
     switch(subCycle) {\
@@ -151,7 +152,8 @@ void CPU::doCycle() {
             subCycle = FINISHED_INSTRUCTION;\
             return;\
         }\
-    }
+    }\
+}
 
 #define macro_abs_read(inst) {\
     switch(subCycle) {\
@@ -171,7 +173,8 @@ void CPU::doCycle() {
             subCycle = FINISHED_INSTRUCTION;\
             return;\
         }\
-    }
+    }\
+}
 
 #define macro_abs_indexed_read(inst, index) {\
     switch(subCycle) {\
@@ -199,12 +202,13 @@ void CPU::doCycle() {
             subCycle = FINISHED_INSTRUCTION;\
             return;\
         }\
-    }
+    }\
+}
 void CPU::doInstruction() {
     // TODO: implement instructions
     // https://www.nesdev.org/6502_cpu.txt
     switch (instruction) {
-        case BRK: // TODO: do this right
+        case BRK: // TODO: fix interrupt integration
             switch (subCycle) {
                 case 1: {
                     memory.read(pc);
@@ -297,7 +301,7 @@ void CPU::doInstruction() {
                     return;
                 }
                 case 2: {
-                    pc = memory.read(pc) << 8 + t;
+                    pc = (memory.read(pc) << 8) + t;
                     subCycle = FINISHED_INSTRUCTION;
                     return;
                 }
@@ -310,7 +314,7 @@ void CPU::doInstruction() {
                     return;
                 }
                 case 2: {
-                    t16 = memory.read(pc) << 8 + t;
+                    t16 = (memory.read(pc) << 8) + t;
                     return;
                 }
                 case 3: {
@@ -320,8 +324,73 @@ void CPU::doInstruction() {
                 case 4: {
                     pc = t16;
                     t16++;
-                    if (t16 & 0xff00 != pc & 0xff00) t16 -= 0x0100;
-                    pc = memory.read(t16) << 8 + t;
+                    if ((t16 & 0xff00) != (pc & 0xff00)) t16 -= 0x0100;
+                    pc = (memory.read(t16) << 8) + t;
+                    subCycle = FINISHED_INSTRUCTION;
+                    return;
+                }
+            }
+        case JSR:
+            switch (subCycle) {
+                case 1: {
+                    t = memory.read(pc);
+                    pc++;
+                    return;
+                }
+                case 2: {
+                    memory.read(0x100 + stack);
+                    return;
+                }
+                case 3: {
+                    stackPush(pc >> 8);
+                    return;
+                }
+                case 4: {
+                    stackPush(pc & 0xff);
+                    return;
+                }
+                case 5: {
+                    pc = (memory.read(pc) << 8) + t;
+                    subCycle = FINISHED_INSTRUCTION;
+                    return;
+                }
+            }
+        case RTS:
+            switch (subCycle) {
+                case 1: {
+                    memory.read(pc);
+                    return;
+                }
+                case 3: {
+                    t = stackPop();
+                    return;
+                }
+                case 4: {
+                    pc = (stackPop() << 8) + t;
+                    return;
+                }
+                case 5: {
+                    pc++;
+                    subCycle = FINISHED_INSTRUCTION;
+                    return;
+                }
+            }
+        case RTI:
+            switch (subCycle) {
+                case 1: {
+                    memory.read(pc);
+                    return;
+                }
+                case 3: {
+                    status = stackPop();
+                    return;
+                }
+                case 4: {
+                    t = stackPop();
+                    return;
+                }
+                case 5: {
+                    pc = (stackPop() << 8) + t;
                     subCycle = FINISHED_INSTRUCTION;
                     return;
                 }
@@ -573,32 +642,33 @@ void CPU::doInstruction() {
             subCycle = FINISHED_INSTRUCTION;
             return;
         }
+        case NOP:
         case 0x1A:
         case 0x3A:
         case 0x5A:
-        case 0x7A:
-        case 0xDA: // Implied NOP
+        case 0x7A: // Implied NOP
+        case 0xDA: // 1 Byte, 2 Cycle
         case 0xFA: macro_impl();
         case 0x80:
         case 0x82:
-        case 0x89:
-        case 0xC2: // Immediate NOP
+        case 0x89: // Immediate NOP
+        case 0xC2: // 2 Bytes, 2 Cycle
         case 0xE2: macro_imm();
-        case 0x04:
-        case 0x44: // Zeropage NOP
+        case 0x04: // Zeropage NOP
+        case 0x44: // 2 Bytes, 3 Cycles
         case 0x64: macro_zero_read();
         case 0x14:
         case 0x34:
         case 0x54:
-        case 0x74:
-        case 0xD4: // Zeropage Indexed NOP
+        case 0x74: // Zeropage Indexed NOP
+        case 0xD4: // 2 Bytes, 4 Cycles
         case 0xF4: macro_zero_indexed_read(,x);
-        case 0x0C: macro_abs_read(); // Absolute NOP
+        case 0x0C: macro_abs_read(); // Absolute NOP; 3 Bytes, 4 Cycles
         case 0x1C:
         case 0x3C:
         case 0x5C:
-        case 0x7C:
-        case 0xDC: // Absolute Indexed NOP
+        case 0x7C: // Absolute Indexed NOP
+        case 0xDC: // 3 Bytes, 4/5 Cycles
         case 0xFC: macro_abs_indexed_read(,x);
         case 0x02:
         case 0x12:
@@ -608,7 +678,7 @@ void CPU::doInstruction() {
         case 0x52:
         case 0x62:
         case 0x72:
-        case 0x92: // JAM
+        case 0x92: // JAM, KIL, HLT
         case 0xB2: // No need to accurately emulate
         case 0xD2: // the crash instructions
         case 0xF2: {

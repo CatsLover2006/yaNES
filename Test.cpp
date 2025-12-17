@@ -13,11 +13,6 @@
 #include "Memory.hpp"
 #include "InstructionSet.h"
 
-void INLINE cycle(CPU &cpu) {
-    cpu.doCycle();
-    cpu.doWriteback();
-}
-
 Test(LDA_immediate, test) {
     Memory memory;
     CPU cpu(memory);
@@ -29,8 +24,8 @@ Test(LDA_immediate, test) {
     memory.write(0xfffd, 0);
     cpu.reset();
     // Do 2 cycles to finish LDA instruction
-    for (int i = 0; i < 2; i++)
-        cycle(cpu);
+    for (int i = 0; i < 9; i++)
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 69);
 }
 
@@ -49,37 +44,37 @@ Test(ROL_accumulator, test) {
     memory.write(0xfffd, 0);
     cpu.reset();
     // Do 2 cycles to finish test setup
-    for (int i = 0; i < 2; i++)
-        cycle(cpu);
+    for (int i = 0; i < 9; i++)
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 1);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 2);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 4);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 8);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 16);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 32);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 64);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 128);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 0);
     cr_expect(cpu.status & 0b00000010, "Zero not set");
     cr_expect(cpu.status & 0b00000001, "Carry not set");
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 1);
     cr_expect(!(cpu.status & 0b00000010), "Zero set");
     cr_expect(!(cpu.status & 0b00000001), "Carry set");
@@ -100,37 +95,37 @@ Test(ASL_accumulator, test) {
     memory.write(0xfffd, 0);
     cpu.reset();
     // Do 2 cycles to finish test setup
-    for (int i = 0; i < 2; i++)
-        cycle(cpu);
+    for (int i = 0; i < 9; i++)
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 1);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 2);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 4);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 8);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 16);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 32);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 64);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 128);
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 0);
     cr_expect(cpu.status & 0b00000010, "Zero not set");
     cr_expect(cpu.status & 0b00000001, "Carry not set");
     for (int i = 0; i < 2; i++)
-        cycle(cpu);
+        cpu.doCycle();
     cr_expect(cpu.accumulator == 0);
     cr_expect(cpu.status & 0b00000010, "Zero not set");
     cr_expect(!(cpu.status & 0b00000001), "Carry set");
@@ -148,16 +143,16 @@ Test(JAM, test) {
         cpu.reset();
         // Do 1000 cycles
         for (int i = 0; i < 1000; i++)
-            cycle(cpu);
-        cr_expect(cpu.pc == 0, "0x%x failed to jam", value);
+            cpu.doCycle();
+        cr_expect(cpu.pc == 1, "0x%x failed to jam", value);
     }
     memory.write(0, LDA);
     memory.write(1, 1);
     memory.write(2, ROL);
     cpu.reset();
-    for (int i = 0; i < 4; i++) cycle(cpu);
+    for (int i = 0; i < 11; i++) cpu.doCycle();
     cr_assert(cpu.pc, "CPU failed to unjam after reset");
     cr_expect(cpu.accumulator == 2, "CPU does not run code properly after jam and reset");
-}
+} //*///
 
 

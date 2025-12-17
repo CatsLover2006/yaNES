@@ -60,30 +60,48 @@ CPU::CPU(Memory &memory) : memory(memory) {
     y = 0;
     stack = 0xff;
     status = 0;
-}
-
-void CPU::setReset() {
-    resetCPU = true;
-}
-
-void CPU::clearReset() {
-    resetCPU = false;
+    recievedNMI = 0;
+    recievedIRQ = 0;
+    resetCPU = 0;
 }
 
 void CPU::setNMI() {
-    recievedNMI = true;
+    recievedNMI = 1;
 }
 
 void CPU::clearNMI() {
-    recievedNMI = false;
+    resetCPU <<= 1;
 }
 
 void CPU::setIRQ() {
-    recievedIRQ = true;
+    recievedIRQ = 1;
 }
 
 void CPU::clearIRQ() {
-    recievedIRQ = false;
+    resetCPU <<= 1;
+}
+
+void CPU::setReset() {
+    resetCPU = 1;
+}
+
+void CPU::clearReset() {
+    resetCPU <<= 1;
+}
+
+void CPU::reset() {
+    resetCPU = 2;
+}
+
+#define decode_instruction {\
+    instruction = memory.read(pc);\
+    if (recievedInterrupt) instruction = BRK;\
+    if (instruction == BRK) {\
+        if (resetCPU) t16 = 2;\
+        else if (recievedNMI) t16 = 1;\
+        else if (recievedIRQ) t16 = 4;\
+        else t16 = 0;\
+    }\
 }
 
 void CPU::doCycle() {
@@ -91,13 +109,16 @@ void CPU::doCycle() {
         subCycle = 0;
         recievedInterrupt = true;
     }
+    // std::cout << pc << ";";
     if (subCycle == 0) {
-        // TODO: full instruction decoding logic
-        t = recievedInterrupt;
-        if (recievedInterrupt) instruction = BRK;
-        else instruction = memory.read(pc);
+        // TODO: verify instruction decoding logic
+        decode_instruction;
         pc++;
     } else doInstruction();
+    // std::cout << pc << ";" << (u16) accumulator << ";" << (u16) x << ";" << (u16) y << ";" << (u16) status << ";" << (u16) sp << ";" << (u16) instruction << ";" << (u16) subCycle << ";" << (u16) resetCPU << ";" << (u16) recievedNMI << ";" << (u16) recievedIRQ << std::endl;
+    resetCPU &= 1;
+    recievedNMI &= 1;
+    recievedIRQ &= 1;
     if (subCycle == FINISHED_INSTRUCTION)
         recievedInterrupt = recievedNMI || recievedIRQ;
     subCycle++;
@@ -415,11 +436,257 @@ void CPU::doCycle() {
     }\
 }
 
+#define macro_branch(branch) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            if (branch) {\
+                memory.read(pc);\
+                t16 = pc + t;\
+            } else {\
+                resetCPU &= 1;\
+                recievedNMI &= 1;\
+                recievedIRQ &= 1;\
+                recievedInterrupt = recievedNMI || recievedIRQ;\
+                decode_instruction;\
+                pc++;\
+                subCycle = 0;\
+            }\
+            return;\
+        }\
+        case 3: {\
+            if ((t16 & 0xff00) != (pc & 0xff00)) {\
+                memory.read(t16 - 0x0100);\
+                t = 0;\
+            } else t = 1;\
+            pc = t16;\
+            if (t) {\
+                resetCPU &= 1;\
+                recievedNMI &= 1;\
+                recievedIRQ &= 1;\
+                recievedInterrupt = recievedNMI || recievedIRQ;\
+                decode_instruction;\
+                subCycle = 0;\
+                pc++;\
+            } else subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
+#define macro_zero_manip(inst) {\
+    switch(subCycle) {\
+        case 1: {\
+            t16 = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t = memory.read(t16);\
+            return;\
+        }\
+        case 3: {\
+            memory.write(t16, t);\
+            inst;\
+            return;\
+        }\
+        case 4: {\
+            memory.write(t16, t);\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
+#define macro_zero_indexed_manip(inst, index) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            memory.read(t);\
+            t += index;\
+            return;\
+        }\
+        case 3: {\
+            t16 = t;\
+            t = memory.read(t16);\
+            return;\
+        }\
+        case 4: {\
+            memory.write(t16, t);\
+            inst;\
+            return;\
+        }\
+        case 5: {\
+            memory.write(t16, t);\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
+#define macro_abs_manip(inst) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t16 = memory.read(pc) << 8 | t;\
+            pc++;\
+            return;\
+        }\
+        case 3: {\
+            t = memory.read(t16);\
+            return;\
+        }\
+        case 4: {\
+            memory.write(t16, t);\
+            inst;\
+            return;\
+        }\
+        case 5: {\
+            memory.write(t16, t);\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
+#define macro_abs_indexed_manip(inst, index) {\
+    switch(subCycle) {\
+        case 1: {\
+            t16 = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t = memory.read(pc);\
+            t16 += t << 8;\
+            pc++;\
+            return;\
+        }\
+        case 3: {\
+            t16 += index;\
+            if (t16 >> 8 != t) memory.read(t16 - 0x0100);\
+            else memory.read(t16);\
+            return;\
+        }\
+        case 4: {\
+            t = memory.read(t16);\
+            return;\
+        }\
+        case 5: {\
+            memory.write(t16, t);\
+            inst;\
+            return;\
+        }\
+        case 6: {\
+            memory.write(t16, t);\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
+#define macro_indexed_indirect_manip(inst, index) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t = memory.read(t);\
+            t += index;\
+            return;\
+        }\
+        case 3: {\
+            t16 = memory.read(t);\
+            return;\
+        }\
+        case 4: {\
+            t16 += memory.read(t + 1) << 8;\
+            return;\
+        }\
+        case 5: {\
+            t = memory.read(t16);\
+            return;\
+        }\
+        case 6: {\
+            memory.write(t16, t);\
+            inst;\
+            return;\
+        }\
+        case 7: {\
+            memory.write(t16, t);\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
+#define macro_indirect_indexed_manip(inst, index) {\
+    switch(subCycle) {\
+        case 1: {\
+            t = memory.read(pc);\
+            pc++;\
+            return;\
+        }\
+        case 2: {\
+            t16 = memory.read(t);\
+            return;\
+        }\
+        case 3: {\
+            t = memory.read(t + 1);\
+            t16 += t << 8;\
+            return;\
+        }\
+        case 4: {\
+            t16 += index;\
+            if (t16 >> 8 != t) memory.read(t16 - 0x0100);\
+            else memory.read(t16);\
+            return;\
+        }\
+        case 5: {\
+            t = memory.read(t16);\
+            return;\
+        }\
+        case 6: {\
+            memory.write(t16, t);\
+            inst;\
+            return;\
+        }\
+        case 7: {\
+            memory.write(t16, t);\
+            subCycle = FINISHED_INSTRUCTION;\
+            return;\
+        }\
+    }\
+}
+
 void CPU::doInstruction() {
     // TODO: implement instructions
     // https://www.nesdev.org/6502_cpu.txt
     switch (instruction) {
-        case BRK: // TODO: fix interrupt integration
+        case BRK: // TODO: verify interrupts
+            if (!t16) {
+                setStatusB;
+                if (recievedNMI || recievedIRQ) {
+                    if (recievedNMI) t16 = 1;
+                    else t16 = 4;
+                    subCycle = 0;
+                    return;
+                }
+            }
             switch (subCycle) {
                 case 1: {
                     memory.read(pc);
@@ -427,7 +694,7 @@ void CPU::doInstruction() {
                 }
                 case 2: {
                     t = status;
-                    if (recievedNMI || resetCPU) t = 0;
+                    if (t16 & 3) t = 0;
                     if (t & 0b00010000) stackPush(pc >> 8);
                     return;
                 }
@@ -440,17 +707,36 @@ void CPU::doInstruction() {
                     return;
                 }
                 case 5: {
-                    if (resetCPU) t = memory.read(0xfffc);
-                    else if (recievedNMI) {
-                        t = memory.read(0xfffa);
-                    } else t = memory.read(0xfffe); // IRQ or BRK
-                    return;
+                    switch (t16) {
+                        case 2: { // RESET
+                            t = memory.read(0xfffc);
+                            return;
+                        }
+                        case 1: { // NMI
+                            t = memory.read(0xfffa);
+                            return;
+                        }
+                        default: { // IRQ or BRK
+                            t = memory.read(0xfffe);
+                            return;
+                        }
+                    }
                 }
                 case 6: {
-                    if (resetCPU) pc = memory.read(0xfffd) << 8 | t;
-                    else if (recievedNMI) {
-                        pc = memory.read(0xfffb) << 8 | t;
-                    } else pc = memory.read(0xffff) << 8 | t; // IRQ or BRK
+                    switch (t16) {
+                        case 2: { // RESET
+                            pc = memory.read(0xfffd) << 8 | t;
+                            break;
+                        }
+                        case 1: { // NMI
+                            pc = memory.read(0xfffb) << 8 | t;
+                            
+                            break;
+                        }
+                        default: { // IRQ or BRK
+                            pc = memory.read(0xffff) << 8 | t;
+                        }
+                    }
                     recievedInterrupt = false;
                     subCycle = FINISHED_INSTRUCTION;
                     return;
@@ -593,7 +879,7 @@ void CPU::doInstruction() {
                     return;
                 }
                 case 3: {
-                    status = stackPop();
+                    status = stackPop() & 0b11001111;
                     return;
                 }
                 case 4: {
@@ -616,11 +902,12 @@ void CPU::doInstruction() {
             else clearStatusC;
             updateZN(accumulator);
         });
+        case LSR:
         case ROR: macro_impl({
             if (accumulator & 1) t = true;
             else t = false;
             accumulator >>= 1;
-            if (statusC) accumulator |= 0x80;
+            if (instruction == ROR && statusC) accumulator |= 0x80;
             if (t) setStatusC;
             else clearStatusC;
             updateZN(accumulator);
@@ -723,6 +1010,28 @@ void CPU::doInstruction() {
         case STX_0: macro_zero_write(t = x);
         case STY_0: macro_zero_write(t = y);
         case SAX_0: macro_zero_write(t = accumulator & x);
+        case ASL_0:
+        case ROL_0: macro_zero_manip({
+            if (accumulator & 0x80) t = true;
+            else t = false;
+            accumulator <<= 1;
+            if (instruction == ROL_0 && statusC) accumulator |= 1;
+            if (t) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+        });
+        case LSR_0:
+        case ROR_0: macro_zero_manip({
+            if (accumulator & 1) t = true;
+            else t = false;
+            accumulator >>= 1;
+            if (instruction == ROR_0 && statusC) accumulator |= 0x80;
+            if (t) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+        });
+        case INC_0: macro_zero_manip(t++; updateZN(t));
+        case DEC_0: macro_zero_manip(t--; updateZN(t));
         case ADC_0X:
         case SBC_0X: macro_zero_indexed_read({
             if (instruction == SBC_0) t = ~t;
@@ -752,6 +1061,28 @@ void CPU::doInstruction() {
         case STX_0Y: macro_zero_indexed_write(t = x, y);
         case STY_0X: macro_zero_indexed_write(t = y, x);
         case SAX_0Y: macro_zero_indexed_write(t = accumulator & x, y);
+        case ASL_0X:
+        case ROL_0X: macro_zero_indexed_manip({
+            if (accumulator & 0x80) t = true;
+            else t = false;
+            accumulator <<= 1;
+            if (instruction == ROL_0X && statusC) accumulator |= 1;
+            if (t) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+        }, x);
+        case LSR_0X:
+        case ROR_0X: macro_zero_indexed_manip({
+            if (accumulator & 1) t = true;
+            else t = false;
+            accumulator >>= 1;
+            if (instruction == ROR_0X && statusC) accumulator |= 0x80;
+            if (t) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+        }, x);
+        case INC_0X: macro_zero_indexed_manip(t++; updateZN(t), x);
+        case DEC_0X: macro_zero_indexed_manip(t--; updateZN(t), x);
         case ADC_A:
         case SBC_A: macro_abs_read({
             if (instruction == SBC_A) t = ~t;
@@ -797,6 +1128,28 @@ void CPU::doInstruction() {
         case SAX_A: macro_abs_write(t = accumulator & x);
         case STX_A: macro_abs_write(t = x);
         case STY_A: macro_abs_write(t = y);
+        case ASL_A:
+        case ROL_A: macro_abs_manip({
+            if (accumulator & 0x80) t = true;
+            else t = false;
+            accumulator <<= 1;
+            if (instruction == ROL_A && statusC) accumulator |= 1;
+            if (t) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+        });
+        case LSR_A:
+        case ROR_A: macro_abs_manip({
+            if (accumulator & 1) t = true;
+            else t = false;
+            accumulator >>= 1;
+            if (instruction == ROR_A && statusC) accumulator |= 0x80;
+            if (t) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+        });
+        case INC_A: macro_abs_manip(t++; updateZN(t));
+        case DEC_A: macro_abs_manip(t--; updateZN(t));
         case ADC_AX:
         case SBC_AX: macro_abs_indexed_read({
             if (instruction == SBC_0) t = ~t;
@@ -820,6 +1173,28 @@ void CPU::doInstruction() {
         case EOR_AX: macro_abs_indexed_read(accumulator ^= t; updateZN(accumulator), x);
         case LDA_AX: macro_abs_indexed_read(accumulator = t; updateZN(t), x);
         case STA_AX: macro_abs_indexed_write(t = accumulator, x);
+        case ASL_AX:
+        case ROL_AX: macro_abs_indexed_manip({
+            if (accumulator & 0x80) t = true;
+            else t = false;
+            accumulator <<= 1;
+            if (instruction == ROL_AX && statusC) accumulator |= 1;
+            if (t) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+        }, x);
+        case LSR_AX:
+        case ROR_AX: macro_abs_indexed_manip({
+            if (accumulator & 1) t = true;
+            else t = false;
+            accumulator >>= 1;
+            if (instruction == ROR_AX && statusC) accumulator |= 0x80;
+            if (t) setStatusC;
+            else clearStatusC;
+            updateZN(accumulator);
+        }, x);
+        case INC_AX: macro_abs_indexed_manip(t++; updateZN(t), x);
+        case DEC_AX: macro_abs_indexed_manip(t--; updateZN(t), x);
         case LDX_AY: macro_abs_indexed_read(x = t; updateZN(t), y);
         case LDY_AX: macro_abs_indexed_read(y = t; updateZN(t), x);
         case LAX_AY: macro_abs_indexed_read(x = t; accumulator = x; updateZN(x), y);
@@ -907,7 +1282,7 @@ void CPU::doInstruction() {
             return;
         }
         case ANC:
-        case ANC_R: {
+        case ANC2: {
             accumulator &= memory.read(pc);
             if (accumulator & 0x80) setStatusC;
             else clearStatusC;
@@ -928,6 +1303,14 @@ void CPU::doInstruction() {
             subCycle = FINISHED_INSTRUCTION;
             return;
         }
+        case BCC: macro_branch(!statusC);
+        case BCS: macro_branch(statusC);
+        case BNE: macro_branch(!statusZ);
+        case BEQ: macro_branch(statusZ);
+        case BPL: macro_branch(!statusN);
+        case BMI: macro_branch(statusN);
+        case BVC: macro_branch(!statusV);
+        case BVS: macro_branch(statusV);
         case NOP:
         case 0x1A:
         case 0x3A:

@@ -14,70 +14,102 @@
 #define BRK     0x00
 #define ORA_I   0x01
 #define ORA_0   0x05
+#define ASL_0   0x06
 #define PHP     0x08
 #define ORA     0x09
 #define ASL     0x0A
 #define ANC     0x0B // Illegal Opcode
 #define ORA_A   0x0D
+#define ASL_A   0x0E
+#define BPL     0x10
 #define ORA_IY  0x11
 #define ORA_0X  0x15
+#define ASL_0X  0x16
 #define CLC     0x18
 #define ORA_AY  0x19
 #define ORA_AX  0x1D
+#define ASL_AX  0x1E
+#define JSR     0x20
 #define AND_I   0x21
 #define BIT_0   0x24
 #define AND_0   0x25
+#define ROL_0   0x26
 #define PLP     0x28
 #define AND     0x29
 #define ROL     0x2A
-#define ANC_R   0x2B // Illegal Opcode
+#define ANC2    0x2B // Illegal Opcode
 #define BIT_A   0x2C
 #define AND_A   0x2D
-#define JSR     0x30
+#define ROL_A   0x2E
+#define BMI     0x30
 #define AND_IY  0x31
 #define AND_0X  0x35
+#define ROL_0X  0x36
 #define SEC     0x38
 #define AND_AY  0x39
 #define AND_AX  0x3D
+#define ROL_AX  0x3E
 #define RTI     0x40
 #define EOR_I   0x41
 #define EOR_0   0x45
+#define LSR_0   0x46
 #define PHA     0x48
 #define EOR     0x49
 #define LSR     0x4A
 #define ALR     0x4B // Illegal Opcode
 #define JMP     0x4C
 #define EOR_A   0x4D
+#define LSR_A   0x4E
+#define BVC     0x50
 #define EOR_IY  0x51
 #define EOR_0X  0x55
+#define LSR_0X  0x56
 #define CLI     0x58
 #define EOR_AY  0x59
+#define LSR_AX  0x5E
 #define EOR_AX  0x5D
 #define RTS     0x60
 #define ADC_I   0x61
 #define ADC_0   0x65
+#define ROR_0   0x66
 #define PLA     0x68
 #define ADC     0x69
 #define ROR     0x6A
 #define ARR     0x6B // Illegal Opcode
 #define JMP_I   0x6C
 #define ADC_A   0x6D
+#define ROR_A   0x6E
+#define BVS     0x70
 #define ADC_IY  0x71
 #define ADC_0X  0x75
+#define ROR_0X  0x76
 #define SEI     0x78
 #define ADC_AY  0x79
 #define ADC_AX  0x7D
+#define ROR_AX  0x7E
+#define STA_I   0x81
+#define SAX_I   0x83 // Illegal Opcode
 #define STY_0   0x84
 #define STA_0   0x85
 #define STX_0   0x86
+#define SAX_0   0x87 // Illegal Opcode
 #define DEY     0x88
 #define TXA     0x8A
 #define XAA     0x8B // Illegal Opcode
+#define STY_A   0x8C
+#define STA_A   0x8D
+#define STX_A   0x8E
+#define SAX_A   0x8F // Illegal Opcode
+#define BCC     0x90
+#define STA_IY  0x91
 #define STY_0X  0x94
 #define STA_0X  0x95
 #define STX_0Y  0x96
+#define SAX_0Y  0x97 // Illegal Opcode
 #define TYA     0x98
+#define STA_AY  0x99
 #define TXS     0x9A
+#define STA_AX  0x9D
 #define LDY     0xA0
 #define LDA_I   0xA1
 #define LDX     0xA2
@@ -94,6 +126,7 @@
 #define LDA_A   0xAD
 #define LDX_A   0xAE
 #define LAX_A   0xAF // Illegal Opcode
+#define BCS     0xB0
 #define LDA_IY  0xB1
 #define LAX_IY  0xB3 // Illegal Opcode
 #define LDY_0X  0xB4
@@ -111,30 +144,40 @@
 #define CMP_I   0xC1
 #define CPY_0   0xC4
 #define CMP_0   0xC5
+#define DEC_0   0xC6
 #define INY     0xC8
 #define CMP     0xC9
 #define DEX     0xCA
 #define CPY_A   0xCC
 #define CMP_A   0xCD
+#define DEC_A   0xCE
+#define BNE     0xD0
 #define CMP_IY  0xD1
 #define CMP_0X  0xD5
+#define DEC_0X  0xD6
 #define CLD     0xD8
 #define CMP_AY  0xD9
 #define CMP_AX  0xDD
+#define DEC_AX  0xDE
 #define CPX     0xE0
 #define SBC_I   0xE1
 #define CPX_0   0xE4
 #define SBC_0   0xE5
+#define INC_0   0xE6
 #define INX     0xE8
 #define SBC     0xE9
 #define NOP     0xEA
 #define USBC    0xEB // Illegal Opcode
 #define CPX_A   0xEC
 #define SBC_A   0xED
+#define INC_A   0xEE
+#define BEQ     0xF0
 #define SBC_IY  0xF1
 #define SBC_0X  0xF5
+#define INC_0X  0xF6
 #define SED     0xF8
 #define SBC_AY  0xF9
 #define SBC_AX  0xFD
+#define INC_AX  0xFE
 
 #endif /* InstructionSet_h */

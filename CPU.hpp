@@ -16,8 +16,8 @@ private:
     Memory &memory;
     u8 t;
     u16 t16;
-    bool recievedNMI, recievedIRQ, recievedInterrupt, resetCPU;
-    u8 instruction;
+    bool recievedInterrupt;
+    u8 recievedNMI, recievedIRQ, resetCPU, instruction;
     s8 subCycle;
     void doInstruction();
 public:
@@ -30,6 +30,7 @@ public:
     void clearIRQ();
     void setReset();
     void clearReset();
+    void reset();
     void stackPush(u8 value);
     u8 stackPop();
     CPU(Memory &memory);

@@ -5,7 +5,7 @@ If someone can come up with a better last word, let me know.
 C++ NES emulator, designed for speed and (semi-unintentionally) portability.   
 Currently WIP.
 ## TODO
-- [~] CPU Emulation
+- [ ] CPU Emulation
   - [x] Official Opcodes
   - [ ] Unofficial/Illegal Opcodes
 - [ ] PPU emulation

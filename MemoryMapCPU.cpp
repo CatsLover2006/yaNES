@@ -40,3 +40,5 @@ void MemoryMapCPU::attachPPU(PPU *ppuToAttach) {
     ppu = ppuToAttach;
     if (cart) ppu->attachCart(cart);
 }
+
+MemoryMapCPU::MemoryMapCPU () { }

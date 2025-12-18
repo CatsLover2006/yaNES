@@ -14,7 +14,7 @@
 #include "PPU.hpp"
 #include "CPU.hpp"
 
-class MemoryMapCPU : Memory {
+class MemoryMapCPU : public Memory {
 private:
     PPU *ppu;
     Cartridge *cart;

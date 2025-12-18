@@ -5,48 +5,46 @@
 //  Created by Chance Parsons on 2025-03-03.
 //
 
+
 #include <cstdlib>
 
 #include "../Common.hpp"
 #include "NROM.hpp"
 
-NROM::NROM(u8* rom) {
-    u8 temp = rom[4];
-    bool hasTrainer = rom[6] & 0x04;
-    prgROM = (u8*) malloc(32768);
-    prgRAM = (u8*) malloc(8192);
-    chrRAM = (u8*) malloc(8192);
-    u16 offset = hasTrainer ? 528 : 16;
-    for (int i = 0; i < 32768; i++) {
-        prgROM[i] = rom[(i & (16384 * temp)) + offset];
-    }
-    offset += 16384 * temp;
-    for (int i = 0; i < 8192; i++) {
-        chrRAM[i] = rom[(i & 8192) + offset];
-    }
+/**
+ * Supported iNES Mappers:
+ * - Mapper 0 (no PRG RAM)
+ */
+
+NROM::NROM(u8* prgROM, u8 prgSize, u8* chrROM, u8 nametableMirroring) {
+    this->prgMask = (prgSize == 2) ? 0x7fff : 0x3fff;
+    this->nametableMirroring = nametableMirroring;
+    this->prgROM = (u8*) malloc(16384 * prgSize);
+    this->chrROM = (u8*) malloc(8192);
+    for (int i = 0; i < 16384 * prgSize; i++)
+        this->prgROM[i] = prgROM[i];
+    for (int i = 0; i < 8192; i++)
+        this->chrROM[i] = chrROM[i];
 }
 
 NROM::~NROM() {
     free(prgROM);
-    free(prgRAM);
-    free(chrRAM);
+    free(chrROM);
 }
 
 u8 NROM::read(u16 location) {
-    if (location < 0x8000) return prgRAM[location & 0x1fff];
-    return prgROM[location & 0x7fff];
+    return prgROM[location & prgMask];
 }
 
 u8 NROM::readPPU(u16 location) {
-    return chrRAM[location & 0x1fff];
+    return chrROM[location & 0x1fff];
 }
 
-void NROM::writePPU(u16 location, u8 value) {
-    if (location < 0x2000) chrRAM[location & 0x1fff] = value;
-}
+void NROM::writePPU(u16 location, u8 value) { }
 
-void NROM::write(u16 location, u8 value) {
-    if (location < 0x8000) prgRAM[location & 0x1fff] = value;
-}
+void NROM::write(u16 location, u8 value) { }
 
+u8 NROM::currentNametableMirroring() {
+    return nametableMirroring;
+}
 

@@ -674,7 +674,7 @@ void CPU::doCycle() {
 }
 
 void CPU::doInstruction() {
-    // TODO: implement instructions
+    // TODO: implement unofficial instructions
     // https://www.nesdev.org/6502_cpu.txt
     switch (instruction) {
         case BRK: // TODO: verify interrupts
